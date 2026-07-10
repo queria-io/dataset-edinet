@@ -19,7 +19,7 @@ title = "EDINET 開示データ"
 description = "金融庁 EDINET の開示書類一覧（有価証券報告書・四半期報告書・大量保有報告書等のメタデータ）、提出者の企業マスタ（業種・市場区分・資本金・決算日等）・ファンドマスタ（投資信託等）、および有価証券報告書の財務データ本体（XBRL を構造化した要素ID×コンテキストの縦持ちファクトと、会計基準横断の主要経営指標の正規化テーブル）。提出者法人番号付きで houjin_bangou / gbizinfo と結合できる。"
 cover = "📑"
 tags = ['EDINET', '有価証券報告書', '開示', '企業', '法人番号', '企業マスタ', '投資信託', '財務', '財務諸表', 'XBRL', '決算']
-repository_url = "https://github.com/flo8s/dataset-edinet"
+repository_url = "https://github.com/queria-io/dataset-edinet"
 schedule = "daily"
 
 [meta.schemas.main]

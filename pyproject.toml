@@ -18,7 +18,7 @@ cover = "📑"
 tags = ["EDINET", "有価証券報告書", "開示", "企業", "法人番号", "企業マスタ", "投資信託"]
 license = "金融庁 EDINET 利用規約"
 license_url = "https://disclosure2.edinet-fsa.go.jp/"
-repository_url = "https://github.com/flo8s/dataset-edinet"
+repository_url = "https://github.com/queria-io/dataset-edinet"
 schedule = "daily"
 
 [tool.queria.schemas.main]
