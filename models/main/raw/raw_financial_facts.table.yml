@@ -1,0 +1,31 @@
+schema: main
+name: raw_financial_facts
+description: 書類取得 API (type=5 CSV) の財務データ本体。要素ID×コンテキストの縦持ちファクト。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
+published: false
+fields:
+  - name: doc_id
+    description: 書類管理番号（documents と結合）
+  - name: element_id
+    description: XBRL 標準タクソノミの要素ID（例 jppfs_cor:NetSales）
+  - name: item_name
+    description: 要素の日本語ラベル
+  - name: context_id
+    description: コンテキストID（期間・連結区分・セグメント次元の識別子）
+  - name: relative_year
+    description: 相対年度（当期 / 前期 / 前々期 等）
+  - name: consolidated_individual
+    description: 連結・個別
+  - name: period_instant
+    description: 期間・時点
+  - name: unit_id
+    description: ユニットID
+  - name: unit
+    description: 単位（円 / 株 / ％ 等）
+  - name: value
+    description: 値（数値・テキストブロックを含む生の値）
+  - name: _csv_type
+    description: CSV 様式コード（jpcrp030000-asr=有報本体 / jpaud=監査 / jpsps=投信 等。取得時メタ）
+  - name: _row_seq
+    description: CSV 内の行番号（取得時メタ）
+  - name: _fetched_at
+    description: CSV 取得時刻（取得時メタ）

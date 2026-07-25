@@ -1,0 +1,63 @@
+spec_version: "0.1"
+name: edinet
+title: EDINET 開示データ
+description: 金融庁 EDINET の開示書類一覧（有価証券報告書・四半期報告書・大量保有報告書等のメタデータ）、提出者の企業マスタ（業種・市場区分・資本金・決算日等）・ファンドマスタ（投資信託等）、および有価証券報告書の財務データ本体（XBRL
+  を構造化した要素ID×コンテキストの縦持ちファクトと、会計基準横断の主要経営指標の正規化テーブル）。提出者法人番号付きで houjin_bangou / gbizinfo と結合できる。
+keywords:
+  - EDINET
+  - 有価証券報告書
+  - 開示
+  - 企業
+  - 法人番号
+  - 企業マスタ
+  - 投資信託
+  - 財務
+  - 財務諸表
+  - XBRL
+  - 決算
+homepage: https://github.com/queria-io/dataset-edinet
+language: ja
+
+licenses:
+  - JP-FSA-EDINET
+
+sources:
+  - title: EDINET（金融庁）
+    path: https://disclosure2.edinet-fsa.go.jp/
+
+contributors:
+  - title: 金融庁
+    path: https://www.fsa.go.jp/
+    roles: [rightsHolder]
+
+temporal_coverage: { start: "2016-06-23", end: null }
+spatial_coverage: [JP]
+update_frequency: daily
+cover: 📑
+
+ai_context:
+  instructions: |
+    企業の開示書類を探す、決算の主要指標を企業横断で比べる、提出のタイミングを調べる、
+    といった用途に使う。
+    mart_documents は書類のメタデータ（91万件・2016年6月以降）で、本文 PDF は含まない。
+    mart_business_results は有価証券報告書の主要経営指標（7万件・4441社・FY2019以降）で、
+    会計基準の違いを吸収した正規化テーブル。stg_financial_facts はその元になる
+    要素ID×コンテキストの縦持ちで、生に忠実な代わりに解釈が要る。
+    財務データは有価証券報告書のみで、四半期・半期報告書は未対応。提出時点の本体だけを
+    取り込んでおり、訂正報告書による訂正は反映していない。過去分は段階的に充填中なので、
+    古い年度ほど欠けがある。
+    EDINET の閲覧可能期間は書類種別ごとに最長10年で、それを過ぎると API から取得できない。
+    つまり収録の下限は制度上の縦覧期間で決まっていて、企業の歴史を遡れるものではない。
+    取下げ書類（is_withdrawn）と不開示（disclosure_status）が混ざるので、集計時は除く。
+    edinet_code は提出者、sec_code は上場会社のみ（末尾0付き5桁）、
+    corporate_number（13桁）で houjin_bangou / gbizinfo / p_portal と結合できる。
+    ファンド（mart_funds）は企業とは別の主体なので、企業数を数えるときに混ぜない。
+  synonyms: [EDINET, 有価証券報告書, 有報, 開示書類, XBRL, 決算]
+  examples:
+    - ある企業の有価証券報告書の提出履歴を見たい
+    - 業種別に売上高や自己資本比率を比べたい
+    - 大量保有報告書の提出が多い企業を調べたい
+
+schemas:
+  - name: main
+    title: EDINET 開示データ

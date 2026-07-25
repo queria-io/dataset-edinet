@@ -1,0 +1,65 @@
+schema: main
+name: raw_documents
+description: EDINET 書類一覧 API (documents.json, type=2) の提出書類メタデータ。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
+published: false
+fields:
+  - name: seqNumber
+    description: ファイル日付ごとの連番
+  - name: docID
+    description: 書類管理番号（EDINET が書類ごとに採番する一意の番号）
+  - name: edinetCode
+    description: 提出者の EDINET コード
+  - name: secCode
+    description: 提出者の証券コード（上場会社のみ）
+  - name: JCN
+    description: 提出者の法人番号（13桁）
+  - name: filerName
+    description: 提出者名
+  - name: fundCode
+    description: ファンドコード
+  - name: ordinanceCode
+    description: 府令コード
+  - name: formCode
+    description: 様式コード
+  - name: docTypeCode
+    description: 書類種別コード（doc_types seed で名称に変換）
+  - name: periodStart
+    description: 期間（自）。有価証券報告書・半期報告書は事業年度、四半期報告書は四半期会計期間
+  - name: periodEnd
+    description: 期間（至）
+  - name: submitDateTime
+    description: 提出日時（YYYY-MM-DD hh:mm）
+  - name: docDescription
+    description: 提出書類概要
+  - name: issuerEdinetCode
+    description: 発行会社 EDINET コード
+  - name: subjectEdinetCode
+    description: 対象 EDINET コード
+  - name: subsidiaryEdinetCode
+    description: 子会社 EDINET コード
+  - name: currentReportReason
+    description: 臨時報告書の提出事由
+  - name: parentDocID
+    description: 親書類管理番号
+  - name: opeDateTime
+    description: 書類情報修正の操作日時
+  - name: withdrawalStatus
+    description: 取下区分（"0"以外は取下げに関する書類）
+  - name: docInfoEditStatus
+    description: 書類情報修正区分
+  - name: disclosureStatus
+    description: 開示不開示区分
+  - name: xbrlFlag
+    description: XBRL 有無フラグ（"1"=あり）
+  - name: pdfFlag
+    description: PDF 有無フラグ
+  - name: attachDocFlag
+    description: 代替書面・添付文書有無フラグ
+  - name: englishDocFlag
+    description: 英文ファイル有無フラグ
+  - name: csvFlag
+    description: CSV 有無フラグ
+  - name: legalStatus
+    description: 縦覧区分（"1"=縦覧中, "2"=延長期間中, "0"=閲覧期間満了）
+  - name: _fetch_date
+    description: 取得対象日（書類一覧 API のファイル日付。取得時メタ）

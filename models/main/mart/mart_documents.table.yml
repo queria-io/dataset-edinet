@@ -1,0 +1,75 @@
+schema: main
+name: mart_documents
+title: EDINET 書類一覧
+description: EDINET 提出書類一覧（有価証券報告書・四半期報告書・大量保有報告書等のメタデータ。法人番号付き）
+published: true
+sources:
+  - path: https://disclosure2.edinet-fsa.go.jp/
+fields:
+  - name: doc_id
+    title: 書類管理番号
+    description: EDINET が書類ごとに採番する一意の番号
+  - name: seq_number
+    title: 連番
+  - name: edinet_code
+    title: 提出者EDINETコード
+  - name: sec_code
+    title: 提出者証券コード
+  - name: corporate_number
+    title: 提出者法人番号
+    description: 13桁。houjin_bangou / gbizinfo と結合できる
+  - name: filer_name
+    title: 提出者名
+  - name: fund_code
+    title: ファンドコード
+  - name: ordinance_code
+    title: 府令コード
+  - name: form_code
+    title: 様式コード
+  - name: doc_type_code
+    title: 書類種別コード
+  - name: doc_type_name
+    title: 書類種別
+    description: 有価証券報告書、四半期報告書、大量保有報告書 等
+  - name: period_start
+    title: 期間（自）
+  - name: period_end
+    title: 期間（至）
+  - name: submit_datetime
+    title: 提出日時
+  - name: submit_date
+    title: 提出日
+  - name: doc_description
+    title: 提出書類概要
+  - name: issuer_edinet_code
+    title: 発行会社EDINETコード
+  - name: subject_edinet_code
+    title: 対象EDINETコード
+  - name: subsidiary_edinet_code
+    title: 子会社EDINETコード
+  - name: current_report_reason
+    title: 臨報提出事由
+  - name: parent_doc_id
+    title: 親書類管理番号
+  - name: ope_datetime
+    title: 書類情報修正日時
+  - name: withdrawal_status
+    title: 取下区分
+  - name: is_withdrawn
+    title: 取下げ書類か
+  - name: doc_info_edit_status
+    title: 書類情報修正区分
+  - name: disclosure_status
+    title: 開示不開示区分
+  - name: has_xbrl
+    title: XBRL有無
+  - name: has_pdf
+    title: PDF有無
+  - name: has_attach_doc
+    title: 代替書面・添付文書有無
+  - name: has_english_doc
+    title: 英文ファイル有無
+  - name: has_csv
+    title: CSV有無
+  - name: legal_status
+    title: 縦覧区分

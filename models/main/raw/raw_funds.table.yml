@@ -1,0 +1,25 @@
+schema: main
+name: raw_funds
+description: ファンドコードリスト（FundcodeDlInfo.csv）のファンドマスタ。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
+published: false
+fields:
+  - name: fund_code
+    description: ファンドコード（G+5桁）
+  - name: sec_code
+    description: 証券コード（ファンドは多くが空）
+  - name: fund_name
+    description: ファンド名
+  - name: fund_name_kana
+    description: ファンド名（ヨミ）
+  - name: security_type
+    description: 特定有価証券区分名（内国投資信託受益証券 等）
+  - name: specified_period_1
+    description: 特定期1（決算期の月日テキスト）
+  - name: specified_period_2
+    description: 特定期2（月日テキスト。多くが空）
+  - name: edinet_code
+    description: 発行者（運用会社）の EDINETコード
+  - name: issuer_name
+    description: 発行者名
+  - name: _fetched_at
+    description: コードリスト取得時刻（取得時メタ）
