@@ -1,0 +1,64 @@
+schema: main
+name: stg_financial_facts
+title: EDINET 財務ファクト（有報・生データ）
+description: EDINET 書類取得 API (type=5 CSV) の財務データ本体を生に忠実な縦持ちで保持する ファクトテーブル。要素ID (標準タクソノミ, 例 jppfs_cor:NetSales)
+  を横断比較キーとして 使える。1 行 = 1 要素 × コンテキスト。現状は有価証券報告書 (提出時点の本体) のみ。 訂正報告書による訂正は未反映。全期間は段階的に充填中。
+published: true
+sources:
+  - path: https://disclosure2.edinet-fsa.go.jp/
+fields:
+  - name: doc_id
+    title: 書類管理番号
+    description: mart_documents / stg_documents と結合できる
+  - name: edinet_code
+    title: 提出者EDINETコード
+  - name: sec_code
+    title: 提出者証券コード
+  - name: corporate_number
+    title: 提出者法人番号
+    description: 13桁。houjin_bangou / gbizinfo と結合できる
+  - name: filer_name
+    title: 提出者名
+  - name: doc_type_code
+    title: 書類種別コード
+  - name: period_end
+    title: 会計期間（至）
+    description: 当該書類の対象会計期間の末日
+  - name: submit_date
+    title: 提出日
+  - name: doc_description
+    title: 提出書類概要
+  - name: element_id
+    title: 要素ID
+    description: XBRL 標準タクソノミの要素ID（例 jppfs_cor:NetSales）。横断比較の鍵
+  - name: item_name
+    title: 項目名
+    description: 要素の日本語ラベル
+  - name: context_id
+    title: コンテキストID
+    description: 期間・連結区分・セグメント次元を表す識別子（例 CurrentYearInstant / Prior1YearDuration_NonConsolidatedMember）。連結/個別は
+      _NonConsolidatedMember 接尾辞、年度は CurrentYear / PriorNYear で判別できる
+  - name: relative_year
+    title: 相対年度
+    description: フロー項目は 当期 / 前期 / 前々期 / 三期前 / 四期前、ストック項目は 当期末 / 前期末 / 前々期末 / 三期前時点 / 四期前時点。提出日時点 等もある
+  - name: consolidated_individual
+    title: 連結・個別
+    description: 連結 / 個別 / その他（主要経営指標の行は その他 固定。連結区分は context_id で判別）
+  - name: period_instant
+    title: 期間・時点
+  - name: unit_id
+    title: ユニットID
+  - name: unit
+    title: 単位
+    description: 円 / 株 / ％ 等
+  - name: value
+    title: 値
+    description: CSV の生の値（数値・テキストブロックを含む）
+  - name: numeric_value
+    title: 数値
+    description: value を数値化したもの（数値でない場合は NULL）
+  - name: csv_type
+    title: CSV様式コード
+    description: jpcrp030000-asr=有報本体 / jpaud=監査報告書 / jpsps=投信 等
+  - name: row_seq
+    title: CSV内行番号

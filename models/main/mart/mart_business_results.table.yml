@@ -1,0 +1,78 @@
+schema: main
+name: mart_business_results
+title: EDINET 主要経営指標（正規化）
+description: 有報「主要な経営指標等の推移」(jpcrp_cor:*SummaryOfBusinessResults) を 「企業×会計年度×標準指標」に pivot した正規化済みワイドテーブル。連結優先
+  （連結があれば連結、無ければ個別）で 1 書類×会計年度=1 行。会計基準 (JP GAAP / IFRS) を問わず同じ列に揃え（IFRS 採用企業は RevenueIFRS 等の 要素を JP GAAP
+  名と統合）、複数社・複数年の指標比較に使える。 1 書類あたり最大5会計年度分（当期〜四期前）の行を持つ。
+published: true
+sources:
+  - path: https://disclosure2.edinet-fsa.go.jp/
+fields:
+  - name: doc_id
+    title: 書類管理番号
+  - name: edinet_code
+    title: 提出者EDINETコード
+  - name: sec_code
+    title: 提出者証券コード
+  - name: corporate_number
+    title: 提出者法人番号
+  - name: filer_name
+    title: 提出者名
+  - name: period_end
+    title: 当期会計期間（至）
+  - name: year_offset
+    title: 年度オフセット
+    description: 当期=0 / 前期=-1 / 前々期=-2 / 三期前=-3 / 四期前=-4（コンテキストIDから導出）
+  - name: fiscal_year
+    title: 会計年度
+    description: period_end の年 + year_offset で算出した実年度
+  - name: net_sales
+    title: 売上高
+  - name: ordinary_income
+    title: 経常利益
+    description: JP GAAP のみ。IFRS 採用企業は税引前利益(profit_before_tax)を参照
+  - name: profit_before_tax
+    title: 税引前利益（IFRS）
+    description: IFRS 採用企業の税引前利益。JP GAAP 企業は NULL
+  - name: net_income
+    title: 当期純利益
+  - name: profit_attributable_to_owners
+    title: 親会社株主帰属当期純利益（連結）
+  - name: comprehensive_income
+    title: 包括利益
+  - name: net_assets
+    title: 純資産額
+  - name: total_assets
+    title: 総資産額
+  - name: capital_stock
+    title: 資本金
+  - name: total_issued_shares
+    title: 発行済株式総数
+  - name: net_assets_per_share
+    title: 1株当たり純資産（BPS）
+    description: IFRS 採用企業は1株当たり親会社所有者帰属持分。 外貨建て（USD）で開示された値はこの列に含めない
+  - name: basic_eps
+    title: 1株当たり当期純利益（EPS）
+  - name: diluted_eps
+    title: 潜在株式調整後EPS
+  - name: equity_to_asset_ratio
+    title: 自己資本比率
+    description: 総資産に占める自己資本の割合。0〜1 の比率で、債務超過の場合は負値になる。 IFRS 採用企業は親会社所有者帰属持分比率
+  - name: roe
+    title: 自己資本利益率（ROE）
+  - name: per
+    title: 株価収益率（PER）
+  - name: dividend_per_share
+    title: 1株当たり配当額
+  - name: interim_dividend_per_share
+    title: 1株当たり中間配当額
+  - name: payout_ratio
+    title: 配当性向
+  - name: cash_and_equivalents
+    title: 現金及び現金同等物残高
+  - name: operating_cash_flow
+    title: 営業活動によるキャッシュ・フロー
+  - name: investing_cash_flow
+    title: 投資活動によるキャッシュ・フロー
+  - name: financing_cash_flow
+    title: 財務活動によるキャッシュ・フロー
