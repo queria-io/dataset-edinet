@@ -79,6 +79,9 @@ models:
       - name: net_assets_per_share
         meta:
           title: 1株当たり純資産（BPS）
+          description: >-
+            IFRS 採用企業は1株当たり親会社所有者帰属持分。
+            外貨建て（USD）で開示された値はこの列に含めない
       - name: basic_eps
         meta:
           title: 1株当たり当期純利益（EPS）
@@ -88,6 +91,9 @@ models:
       - name: equity_to_asset_ratio
         meta:
           title: 自己資本比率
+          description: >-
+            総資産に占める自己資本の割合。0〜1 の比率で、債務超過の場合は負値になる。
+            IFRS 採用企業は親会社所有者帰属持分比率
       - name: roe
         meta:
           title: 自己資本利益率（ROE）

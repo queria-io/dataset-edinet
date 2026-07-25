@@ -20,6 +20,7 @@ with summary as (
         filer_name,
         period_end,
         element_id,
+        unit_id,
         numeric_value,
         context_id not like '%NonConsolidatedMember%' as is_consolidated,
         case
@@ -87,7 +88,13 @@ select
     ) as total_assets,
     max(case when element_id = 'jpcrp_cor:CapitalStockSummaryOfBusinessResults' then numeric_value end) as capital_stock,
     max(case when element_id = 'jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults' then numeric_value end) as total_issued_shares,
-    max(case when element_id = 'jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults' then numeric_value end) as net_assets_per_share,
+    -- IFRS 採用企業の1株当たり親会社所有者帰属持分は、要素名に反して
+    -- EquityToAssetRatioIFRS… に格納される（item_name「１株当たり親会社所有者帰属持分
+    -- （IFRS）」・unit_id JPYPerShares）。JPY 建てのものだけをこの列に寄せる。
+    coalesce(
+        max(case when element_id = 'jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults' then numeric_value end),
+        max(case when element_id = 'jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults' and unit_id = 'JPYPerShares' then numeric_value end)
+    ) as net_assets_per_share,
     coalesce(
         max(case when element_id = 'jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults' then numeric_value end),
         max(case when element_id = 'jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults' then numeric_value end)
@@ -96,8 +103,10 @@ select
         max(case when element_id = 'jpcrp_cor:DilutedEarningsLossPerShareIFRSSummaryOfBusinessResults' then numeric_value end),
         max(case when element_id = 'jpcrp_cor:DilutedEarningsPerShareSummaryOfBusinessResults' then numeric_value end)
     ) as diluted_eps,
+    -- EquityToAssetRatioIFRS… は要素名に反して自己資本比率ではなく1株当たり持分
+    -- （unit_id JPYPerShares）なのでここでは使わない。IFRS の自己資本比率に相当するのは
+    -- RatioOfOwnersEquityToGrossAssetsIFRS…（unit_id pure）。
     coalesce(
-        max(case when element_id = 'jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults' then numeric_value end),
         max(case when element_id = 'jpcrp_cor:RatioOfOwnersEquityToGrossAssetsIFRSSummaryOfBusinessResults' then numeric_value end),
         max(case when element_id = 'jpcrp_cor:EquityToAssetRatioSummaryOfBusinessResults' then numeric_value end)
     ) as equity_to_asset_ratio,
