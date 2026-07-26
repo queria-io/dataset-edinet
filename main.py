@@ -1,8 +1,8 @@
 """EDINET 書類一覧 API 取得 + dbt build パイプライン。
 
 書類一覧 API (documents.json) を日付単位で走査し、提出書類のメタデータを
-fdl の DuckLake カタログ (FDL_* 環境変数で注入) の ``_source.documents`` に
-書き込んでから dbt で変換する。R2 への公開は fdl run/sync の publish が担う。
+queria の DuckLake カタログ (QUERIA_* 環境変数で注入) の ``_source.documents`` に
+書き込んでから dbt で変換する。R2 への公開は queria sync の push が担う。
 
 差分更新:
 - 未取得日のみ取得する（進捗を ``_source.fetch_progress`` に日単位で永続化し、
@@ -121,7 +121,7 @@ RECENT_REFETCH_DAYS = 7
 # 1 回の実行で取得する日数の上限。全期間バックフィル（約 3,800 日）を 1 回で
 # 走らせると CI のジョブ上限を超え、push 前に打ち切られて永続化できない。
 # 1 回あたりを上限内に収め、毎回 build + push まで完走させる。進捗は
-# fetch_progress に永続化され、fdl pull で次回取り込まれるため、日次 cron で
+# fetch_progress に永続化され、queria pull で次回取り込まれるため、日次 cron で
 # 数日かけて履歴が埋まる。未取得分は新しい日付から順に取得する。
 DEFAULT_MAX_DATES_PER_RUN = 1000
 
