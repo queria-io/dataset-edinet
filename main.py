@@ -1,8 +1,8 @@
 """EDINET 書類一覧 API 取得 + dbt build パイプライン。
 
 書類一覧 API (documents.json) を日付単位で走査し、提出書類のメタデータを
-fdl の DuckLake カタログ (FDL_* 環境変数で注入) の ``_source.documents`` に
-書き込んでから dbt で変換する。R2 への公開は fdl run/sync の publish が担う。
+queria の DuckLake カタログ (QUERIA_* 環境変数で注入) の ``_source.documents`` に
+書き込んでから dbt で変換する。R2 への公開は queria sync の push が担う。
 
 差分更新:
 - 未取得日のみ取得する（進捗を ``_source.fetch_progress`` に日単位で永続化し、
@@ -121,7 +121,7 @@ RECENT_REFETCH_DAYS = 7
 # 1 回の実行で取得する日数の上限。全期間バックフィル（約 3,800 日）を 1 回で
 # 走らせると CI のジョブ上限を超え、push 前に打ち切られて永続化できない。
 # 1 回あたりを上限内に収め、毎回 build + push まで完走させる。進捗は
-# fetch_progress に永続化され、fdl pull で次回取り込まれるため、日次 cron で
+# fetch_progress に永続化され、queria pull で次回取り込まれるため、日次 cron で
 # 数日かけて履歴が埋まる。未取得分は新しい日付から順に取得する。
 DEFAULT_MAX_DATES_PER_RUN = 1000
 
@@ -137,33 +137,42 @@ FINANCIAL_BATCH_SIZE = 50
 
 @contextmanager
 def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
-    """fdl 管理の DuckLake をアタッチした新規 DuckDB セッションを開く。
+    """queria 管理の DuckLake をアタッチした新規 DuckDB セッションを開く。
 
-    ``fdl run`` が注入する ``FDL_*`` 環境変数（SQLite ライブカタログ
-    ``FDL_CATALOG_PATH`` とデータ位置 ``FDL_DATA_URL``）を使う。カタログが
+    ``queria run`` が注入する ``QUERIA_*`` 環境変数（SQLite ライブカタログ
+    ``QUERIA_CATALOG_PATH`` とデータ位置 ``QUERIA_DATA_URL``）を使う。カタログが
     存在しない初回アタッチ時には作成される。
     """
-    catalog_path = os.environ["FDL_CATALOG_PATH"]
-    data_url = os.environ["FDL_DATA_URL"]
+    catalog_path = os.environ["QUERIA_CATALOG_PATH"]
+    data_url = os.environ["QUERIA_DATA_URL"]
     conn = duckdb.connect(":memory:")
     try:
         conn.execute("INSTALL ducklake; LOAD ducklake;")
         conn.execute("INSTALL sqlite; LOAD sqlite;")
         if data_url.startswith("s3://"):
             conn.execute("INSTALL httpfs; LOAD httpfs;")
+            # credential_chain はこの拡張にある
+            conn.execute("INSTALL aws; LOAD aws;")
+            # 認証情報を値として持たず、期限が切れたら取り直させる。一時認証情報は
+            # 15 分で切れるのに対しこのビルドはそれより長く走るので、値を渡す形だと
+            # 途中で書けなくなる。process が実行するのは queria で、鍵はどこにも置かない
+            use_ssl = (
+                "false" if os.environ.get("QUERIA_S3_USE_SSL") == "false" else "true"
+            )
             conn.execute(
-                "CREATE SECRET (TYPE s3, KEY_ID ?, SECRET ?, ENDPOINT ?, "
-                "URL_STYLE 'path', REGION 'auto')",
+                "CREATE SECRET (TYPE s3, PROVIDER credential_chain, "
+                "CHAIN 'process', REFRESH auto, ENDPOINT ?, URL_STYLE 'path', "
+                f"REGION ?, USE_SSL {use_ssl})",
                 [
-                    os.environ["FDL_S3_ACCESS_KEY_ID"],
-                    os.environ["FDL_S3_SECRET_ACCESS_KEY"],
-                    os.environ["FDL_S3_ENDPOINT_HOST"],
+                    os.environ["QUERIA_S3_ENDPOINT_HOST"],
+                    os.environ.get("QUERIA_S3_REGION", "auto"),
                 ],
             )
         conn.execute(
             f"ATTACH 'ducklake:{catalog_path}' AS edinet "
             f"(DATA_PATH '{data_url}', OVERRIDE_DATA_PATH true, "
-            f"META_TYPE 'sqlite', META_JOURNAL_MODE 'WAL', BUSY_TIMEOUT 5000)"
+            f"DATA_INLINING_ROW_LIMIT 0, META_TYPE 'sqlite', "
+            f"META_JOURNAL_MODE 'WAL', BUSY_TIMEOUT 5000)"
         )
         yield conn
     finally:
