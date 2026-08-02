@@ -24,6 +24,8 @@ import duckdb
 import pyarrow as pa
 from dbt.cli.main import dbtRunner
 
+from queria import Secret
+
 from edinet.client import EdinetClient
 from edinet.codelist import (
     COMPANY_FIELDS,
@@ -136,7 +138,7 @@ FINANCIAL_BATCH_SIZE = 50
 
 
 @contextmanager
-def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
+def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | None]]:
     """queria 管理の DuckLake をアタッチした新規 DuckDB セッションを開く。
 
     ``queria run`` が注入する ``QUERIA_*`` 環境変数（SQLite ライブカタログ
@@ -149,32 +151,24 @@ def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
     try:
         conn.execute("INSTALL ducklake; LOAD ducklake;")
         conn.execute("INSTALL sqlite; LOAD sqlite;")
-        if data_url.startswith("s3://"):
+        secret: Secret | None = None
+        if Secret.needed():
             conn.execute("INSTALL httpfs; LOAD httpfs;")
             # credential_chain はこの拡張にある
             conn.execute("INSTALL aws; LOAD aws;")
-            # 認証情報を値として持たず、期限が切れたら取り直させる。一時認証情報は
-            # 15 分で切れるのに対しこのビルドはそれより長く走るので、値を渡す形だと
-            # 途中で書けなくなる。process が実行するのは queria で、鍵はどこにも置かない
-            use_ssl = (
-                "false" if os.environ.get("QUERIA_S3_USE_SSL") == "false" else "true"
-            )
-            conn.execute(
-                "CREATE SECRET (TYPE s3, PROVIDER credential_chain, "
-                "CHAIN 'process', REFRESH auto, ENDPOINT ?, URL_STYLE 'path', "
-                f"REGION ?, USE_SSL {use_ssl})",
-                [
-                    os.environ["QUERIA_S3_ENDPOINT_HOST"],
-                    os.environ.get("QUERIA_S3_REGION", "auto"),
-                ],
-            )
+            # 認証情報は値として持たず、取り直せる形で持つ。鍵はどこにも置かれない。
+            # **作っただけでは足りない** — DuckDB は期限を見て取り直さないので、
+            # このビルドの長さだと途中で書けなくなる。取り直しは呼ぶ側の責任で、
+            # 書き込みループの切れ目で refresh_if_due() を呼ぶこと
+            secret = Secret(conn)
+            secret.install()
         conn.execute(
             f"ATTACH 'ducklake:{catalog_path}' AS edinet "
             f"(DATA_PATH '{data_url}', OVERRIDE_DATA_PATH true, "
             f"DATA_INLINING_ROW_LIMIT 0, META_TYPE 'sqlite', "
             f"META_JOURNAL_MODE 'WAL', BUSY_TIMEOUT 5000)"
         )
-        yield conn
+        yield conn, secret
     finally:
         conn.close()
 
@@ -190,7 +184,7 @@ def main() -> None:
     end = date.today()
 
     client = EdinetClient(api_key, rate_limit_seconds=rate)
-    with _ducklake_connect() as conn:
+    with _ducklake_connect() as (conn, secret):
         conn.execute("CREATE SCHEMA IF NOT EXISTS edinet._source")
         _ensure_tables(conn)
         targets = _dates_to_fetch(conn, start, end)
@@ -200,7 +194,7 @@ def main() -> None:
         ingest_funds(conn)
         doc_ids = _docs_to_fetch(conn)
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
-        ingest_financial_facts(conn, client, doc_ids)
+        ingest_financial_facts(conn, client, doc_ids, secret)
 
     dbt = dbtRunner()
     for cmd in (
@@ -247,12 +241,16 @@ def ingest_financial_facts(
     conn: duckdb.DuckDBPyConnection,
     client: EdinetClient,
     doc_ids: list[str],
+    secret: Secret | None = None,
 ) -> None:
     """対象書類の財務 CSV を取得し、バッチ単位で upsert + 進捗永続化する。
 
     ``FINANCIAL_BATCH_SIZE`` 書類ごとに 1 トランザクションでまとめて DELETE→INSERT
     する（1 書類ごとの COMMIT を避け DuckLake のスナップショット/ファイル数を抑える）。
     CSV の無い書類は status='empty' を記録し、次回以降の再取得対象から外す。
+
+    **ここが一番長い。** 1000 書類で 1 時間を超え、認証情報より長生きする。
+    書類の切れ目 (トランザクションの外) で ``secret`` を取り直す。
     """
     total = len(doc_ids)
     batch_rows: list[dict] = []
@@ -285,6 +283,9 @@ def ingest_financial_facts(
         batch_docs.clear()
 
     for i, doc_id in enumerate(doc_ids, 1):
+        # トランザクションの外。間隔が来るまで何もしないので毎回呼んでよい
+        if secret is not None:
+            secret.refresh_if_due()
         rows = client.get_document_csv(doc_id)
         now = datetime.now()
         for csv_type, row_seq, values in rows:
