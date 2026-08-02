@@ -24,7 +24,7 @@ import duckdb
 import pyarrow as pa
 from dbt.cli.main import dbtRunner
 
-from shared.credentials import Secret
+from queria import Secret
 
 from edinet.client import EdinetClient
 from edinet.codelist import (
