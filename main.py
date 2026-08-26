@@ -115,6 +115,15 @@ _FACTS_ARROW_SCHEMA = pa.schema(
     ]
 )
 
+_FINANCIAL_PROGRESS_ARROW_SCHEMA = pa.schema(
+    [
+        ("doc_id", pa.string()),
+        ("fetched_at", pa.timestamp("us")),
+        ("row_count", pa.int32()),
+        ("status", pa.string()),
+    ]
+)
+
 # 閲覧可能期間は書類種別ごとに最長 10 年（縦覧 + 延長）。これより古い日付は
 # 原則 0 件で返るため、既定の遡及開始日は約 10 年前に置く。環境変数で上書き可。
 DEFAULT_BACKFILL_START = "2016-01-01"
@@ -254,7 +263,7 @@ def ingest_financial_facts(
     """
     total = len(doc_ids)
     batch_rows: list[dict] = []
-    batch_progress: list[tuple] = []
+    batch_progress: list[dict] = []
     batch_docs: list[str] = []
 
     def flush() -> None:
@@ -274,9 +283,17 @@ def ingest_financial_facts(
             )
             conn.execute(f"INSERT INTO {FINANCIAL_FACTS_TABLE} SELECT * FROM _facts")
             conn.unregister("_facts")
-        conn.executemany(
-            f"INSERT INTO {FINANCIAL_PROGRESS_TABLE} VALUES (?, ?, ?, ?)", batch_progress
+        # 1 行ずつの INSERT は行ごとに parquet ファイルを作る（インライン化は
+        # ATTACH で無効）。進捗表は _docs_to_fetch が毎回全件読むので、
+        # ファイル数がそのまま R2 への GET 回数になる。facts と同じく 1 回で入れる。
+        conn.register(
+            "_progress",
+            pa.Table.from_pylist(
+                batch_progress, schema=_FINANCIAL_PROGRESS_ARROW_SCHEMA
+            ),
         )
+        conn.execute(f"INSERT INTO {FINANCIAL_PROGRESS_TABLE} SELECT * FROM _progress")
+        conn.unregister("_progress")
         conn.execute("COMMIT")
         batch_rows.clear()
         batch_progress.clear()
@@ -296,7 +313,14 @@ def ingest_financial_facts(
             rec["_row_seq"] = row_seq
             rec["_fetched_at"] = now
             batch_rows.append(rec)
-        batch_progress.append((doc_id, now, len(rows), "done" if rows else "empty"))
+        batch_progress.append(
+            {
+                "doc_id": doc_id,
+                "fetched_at": now,
+                "row_count": len(rows),
+                "status": "done" if rows else "empty",
+            }
+        )
         batch_docs.append(doc_id)
         if len(batch_docs) >= FINANCIAL_BATCH_SIZE:
             flush()
