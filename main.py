@@ -167,8 +167,9 @@ def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | N
             conn.execute("INSTALL aws; LOAD aws;")
             # 認証情報は値として持たず、取り直せる形で持つ。鍵はどこにも置かれない。
             # **作っただけでは足りない** — DuckDB は期限を見て取り直さないので、
-            # このビルドの長さだと途中で書けなくなる。取り直しは呼ぶ側の責任で、
-            # 書き込みループの切れ目で refresh_if_due() を呼ぶこと
+            # このビルドの長さだと途中で読み書きできなくなる。取り直しは呼ぶ側の
+            # 責任で、書き込みループの切れ目では refresh_if_due()、1 時間近くかかる
+            # 単発のクエリの前では refresh() を呼ぶこと
             secret = Secret(conn)
             secret.install()
         conn.execute(
@@ -201,6 +202,11 @@ def main() -> None:
         ingest_documents(conn, client, targets)
         ingest_companies(conn)
         ingest_funds(conn)
+        # _docs_to_fetch は進捗表を全件読むので単体で 1 時間近くかかり、
+        # 発行から 1 時間の認証情報を途中で失う。クエリの前に取り直す。
+        # refresh_if_due() では発行直後で「まだ来ていない」と判断されるので使わない
+        if secret is not None:
+            secret.refresh()
         doc_ids = _docs_to_fetch(conn)
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
         ingest_financial_facts(conn, client, doc_ids, secret)
