@@ -18,4 +18,6 @@ jobs:
     uses: queria-io/dataset-shared/.github/workflows/sync.yml@main
     with:
       dataset_name: edinet
+      # 共通の既定 90 分では足りない。成功ランの実測は最大 147 分
+      timeout_minutes: 240
     secrets: inherit
