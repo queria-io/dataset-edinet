@@ -17,6 +17,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
+    semantic: { role: entity, name: corporate_number }
   - name: filer_name
     title: 提出者名
   - name: doc_type_code

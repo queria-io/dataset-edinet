@@ -16,6 +16,7 @@ fields:
     title: 提出者証券コード
   - name: corporate_number
     title: 提出者法人番号
+    semantic: { role: entity, name: corporate_number }
   - name: filer_name
     title: 提出者名
   - name: period_end
