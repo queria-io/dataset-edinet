@@ -144,6 +144,9 @@ DEFAULT_MAX_DOCS_PER_RUN = 1000
 # 何書類分をまとめて 1 トランザクションでコミットするか。1 書類ごとの COMMIT を
 # 避け DuckLake のスナップショット/Parquet ファイル数を抑える。
 FINANCIAL_BATCH_SIZE = 50
+# 進捗表を読むときに 1 文で読むデータファイルの本数。1 文が認証情報の期限
+# （最短 15 分）に収まる大きさにする。
+PROGRESS_READ_BATCH_FILES = 500
 
 
 @contextmanager
@@ -210,12 +213,7 @@ def main() -> None:
         ingest_documents(conn, client, targets)
         ingest_companies(conn)
         ingest_funds(conn)
-        # _docs_to_fetch は進捗表を全件読むので単体で 1 時間近くかかり、
-        # 発行から 1 時間の認証情報を途中で失う。クエリの前に取り直す。
-        # refresh_if_due() では発行直後で「まだ来ていない」と判断されるので使わない
-        if secret is not None:
-            secret.refresh()
-        doc_ids = _docs_to_fetch(conn)
+        doc_ids = _docs_to_fetch(conn, secret)
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
         ingest_financial_facts(conn, client, doc_ids, secret)
 
@@ -345,7 +343,42 @@ def ingest_financial_facts(
     flush()
 
 
-def _docs_to_fetch(conn: duckdb.DuckDBPyConnection) -> list[str]:
+def _fetched_doc_ids(
+    conn: duckdb.DuckDBPyConnection, secret: Secret | None = None
+) -> pa.Table:
+    """進捗表に登録済みの doc_id を、データファイルを束ごとに読んで返す。
+
+    進捗表は小さなファイルが数万本に分かれていて、1 本のクエリで全件読むと
+    1 時間を超える。1 本の文が認証情報の期限を越えると取り直しようがない
+    （2026-10-07〜10-10 の 4 連続失敗はちょうど 1 時間で 403 になった）ので、
+    束の切れ目で ``refresh_if_due()`` を呼ぶ。
+
+    削除ファイルは見ない。この表の DELETE は同じトランザクションで同じ doc_id を
+    入れ直すときだけなので、データファイルの doc_id の和集合が表の doc_id と一致する。
+    """
+    files = [
+        r[0]
+        for r in conn.execute(
+            "SELECT data_file FROM ducklake_list_files("
+            "'edinet', 'financial_fetch_progress', schema => '_source')"
+        ).fetchall()
+    ]
+    logger.info("financial_fetch_progress: %d files", len(files))
+    seen: set[str] = set()
+    for start in range(0, len(files), PROGRESS_READ_BATCH_FILES):
+        if secret is not None:
+            secret.refresh_if_due()
+        batch = files[start : start + PROGRESS_READ_BATCH_FILES]
+        rows = conn.execute(
+            "SELECT DISTINCT doc_id FROM read_parquet(?)", [batch]
+        ).fetchall()
+        seen.update(r[0] for r in rows)
+    return pa.table({"doc_id": pa.array(sorted(seen), pa.string())})
+
+
+def _docs_to_fetch(
+    conn: duckdb.DuckDBPyConnection, secret: Secret | None = None
+) -> list[str]:
     """財務 CSV 未取得の対象書類 docID を提出日時の新しい順に返す（上限あり）。
 
     対象は ``EDINET_FINANCIAL_DOC_TYPES``（既定 120=有報）かつ csvFlag=1 かつ未取下げ。
@@ -363,11 +396,14 @@ def _docs_to_fetch(conn: duckdb.DuckDBPyConnection) -> list[str]:
         return []
     cap = int(os.environ.get("EDINET_MAX_DOCS_PER_RUN", str(DEFAULT_MAX_DOCS_PER_RUN)))
     ph = ", ".join("?" for _ in doc_types)
+    conn.register("_fetched", _fetched_doc_ids(conn, secret))
+    if secret is not None:
+        secret.refresh_if_due()
     rows = conn.execute(
         f"""
         SELECT d."docID"
         FROM {DOCUMENTS_TABLE} AS d
-        LEFT JOIN {FINANCIAL_PROGRESS_TABLE} AS p ON d."docID" = p.doc_id
+        LEFT JOIN _fetched AS p ON d."docID" = p.doc_id
         WHERE d."docTypeCode" IN ({ph})
           AND d."csvFlag" = '1'
           AND d."withdrawalStatus" = '0'
@@ -378,6 +414,7 @@ def _docs_to_fetch(conn: duckdb.DuckDBPyConnection) -> list[str]:
         """,
         doc_types,
     ).fetchall()
+    conn.unregister("_fetched")
     return [r[0] for r in rows]
 
 
