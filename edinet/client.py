@@ -142,13 +142,14 @@ class EdinetClient:
                     time.sleep(wait)
                     continue
                 raise
-            except urllib.error.URLError as e:
+            # 応答の読み取り中のタイムアウトや切断は URLError に包まれずに上がってくる
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 if attempt < self._max_retries:
                     wait = self._rate_limit_seconds * 2**attempt
                     logger.warning(
-                        "doc=%s URLError %s, retry %d/%d after %.1fs",
+                        "doc=%s %r, retry %d/%d after %.1fs",
                         doc_id,
-                        e.reason,
+                        e,
                         attempt,
                         self._max_retries,
                         wait,
@@ -181,13 +182,14 @@ class EdinetClient:
                     time.sleep(wait)
                     continue
                 raise
-            except urllib.error.URLError as e:
+            # 応答の読み取り中のタイムアウトや切断は URLError に包まれずに上がってくる
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 if attempt < self._max_retries:
                     wait = self._rate_limit_seconds * 2**attempt
                     logger.warning(
-                        "date=%s URLError %s, retry %d/%d after %.1fs",
+                        "date=%s %r, retry %d/%d after %.1fs",
                         target_date,
-                        e.reason,
+                        e,
                         attempt,
                         self._max_retries,
                         wait,
