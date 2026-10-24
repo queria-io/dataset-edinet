@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: mart_human_capital
+    description: >-
+      有価証券報告書の「従業員の状況」「女性活躍・育児休業の指標」「役員の状況」を 1 書類 = 1 行にまとめた表。従業員数（連結・提出会社）、平均年齢・平均勤続年数・平均年間給与（提出会社）、管理職に占める女性の割合、男女の賃金の差異、男性の育児休業取得率、女性役員の人数と比率を持つ。値はその有報の当期分だけで、年をまたぐ推移は各年の有報の行を並べて追う。女性活躍・育児休業の指標は 2023 年 3 月期以降の有報から開示されている。
+    columns:
+      - name: doc_id
+      - name: edinet_code
+      - name: sec_code
+      - name: corporate_number
+      - name: filer_name
+      - name: period_end
+      - name: fiscal_year
+      - name: submit_date
+      - name: number_of_employees_consolidated
+      - name: number_of_employees
+      - name: temporary_workers_consolidated
+      - name: temporary_workers
+      - name: average_age
+      - name: average_length_of_service
+      - name: average_annual_salary
+      - name: female_manager_ratio
+      - name: female_to_male_wage_ratio
+      - name: female_to_male_wage_ratio_regular
+      - name: female_to_male_wage_ratio_non_regular
+      - name: male_childcare_leave_rate
+      - name: male_childcare_leave_rate_basis
+      - name: female_officers
+      - name: female_officer_ratio
