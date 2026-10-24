@@ -12,7 +12,7 @@
 --     連結子会社の指標（…MetricsOfConsolidatedSubsidiaries）は子会社ごとの行で、
 --     数値ファクトに子会社名が無いのでここでは扱わない
 --   - 女性役員は FilingDateInstant（提出日時点）。FilingDateInstant が無く
---     CurrentYearInstant にだけ付けた書類はそちらを使う
+--     CurrentYearInstant（期末）にだけ付けた書類はそちらを使う（人数と比率は同じ時点にそろえる）
 -- 同じ element_id × context_id の行が書類内で重複して出ることがある（値は同じ）ので max で潰す。
 with facts as (
     select
@@ -118,17 +118,23 @@ pivoted as (
         max(case when f.element_id = 'jpcrp_cor:AverageAgeMonthsInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as average_age_months,
         max(case when f.element_id = 'jpcrp_cor:AverageLengthOfServiceYearsInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as length_of_service_years,
         max(case when f.element_id = 'jpcrp_cor:AverageLengthOfServiceMonthsInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as length_of_service_months,
-        max(case when f.element_id = 'jpcrp_cor:AverageAnnualSalaryInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as average_annual_salary,
-        coalesce(
-            max(case when f.element_id = 'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'FilingDateInstant' then f.numeric_value end),
-            max(case when f.element_id = 'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'CurrentYearInstant' then f.numeric_value end)
-        ) as female_officers,
-        coalesce(
-            max(case when f.element_id = 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'FilingDateInstant' then f.numeric_value end),
-            max(case when f.element_id = 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'CurrentYearInstant' then f.numeric_value end)
-        ) as female_officer_ratio
+        max(case when f.element_id = 'jpcrp_cor:AverageAnnualSalaryInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as average_annual_salary
     from facts as f
     group by f.doc_id
+),
+
+-- 女性役員の人数と比率は同じ時点の値にそろえる。提出日時点（FilingDateInstant）の
+-- 値が 1 つでもある書類はそれだけを使い、無い書類だけ期末（CurrentYearInstant）を使う
+officers as (
+    select
+        doc_id,
+        max(case when element_id = 'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers' then numeric_value end) as female_officers,
+        max(case when element_id = 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers' then numeric_value end) as female_officer_ratio
+    from facts
+    where element_id in ('jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers', 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers')
+      and context_id in ('FilingDateInstant', 'CurrentYearInstant')
+    group by doc_id, context_id
+    qualify row_number() over (partition by doc_id order by context_id = 'FilingDateInstant' desc) = 1
 ),
 
 reporting_metrics as (
@@ -168,11 +174,12 @@ select
     case when m.female_to_male_wage_ratio_non_regular > 2 then m.female_to_male_wage_ratio_non_regular / 100 else m.female_to_male_wage_ratio_non_regular end as female_to_male_wage_ratio_non_regular,
     c.male_childcare_leave_rate,
     c.male_childcare_leave_rate_basis,
-    p.female_officers::integer as female_officers,
-    case when p.female_officer_ratio > 1 then p.female_officer_ratio / 100 else p.female_officer_ratio end as female_officer_ratio
+    o.female_officers::integer as female_officers,
+    case when o.female_officer_ratio > 1 then o.female_officer_ratio / 100 else o.female_officer_ratio end as female_officer_ratio
 from pivoted as p
 left join reporting_metrics as m using (doc_id)
 left join childcare as c using (doc_id)
+left join officers as o using (doc_id)
 -- 人的資本の項目が 1 つも無い書類（投資法人など）は落とす
 where coalesce(
     p.number_of_employees_consolidated, p.number_of_employees,
@@ -180,5 +187,5 @@ where coalesce(
     p.average_age_years, p.length_of_service_years, p.average_annual_salary,
     m.female_manager_ratio, m.female_to_male_wage_ratio,
     m.female_to_male_wage_ratio_regular, m.female_to_male_wage_ratio_non_regular,
-    c.male_childcare_leave_rate, p.female_officers, p.female_officer_ratio
+    c.male_childcare_leave_rate, o.female_officers, o.female_officer_ratio
 ) is not null
