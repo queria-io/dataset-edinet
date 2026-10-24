@@ -5,7 +5,7 @@
 -- mart_human_capital では賃金の差異は 2 を、女性管理職比率・女性役員比率は 1 を
 -- 超える値を % とみなして直しているので、直したあとにそれを超える値が残っていれば
 -- 変換の取りこぼし。
--- 平均年間給与の桁誤り（5,000 万円以上）と負の臨時雇用人員は NULL にしている。
+-- 平均年間給与の桁誤り（10 万円未満・5,000 万円超）と負の臨時雇用人員は NULL にしている。
 select
     doc_id,
     edinet_code,
@@ -25,6 +25,7 @@ where female_manager_ratio > 1
    or female_to_male_wage_ratio_regular > 2
    or female_to_male_wage_ratio_non_regular > 2
    or female_officer_ratio > 1
-   or average_annual_salary >= 50000000
+   or average_annual_salary < 100000
+   or average_annual_salary > 50000000
    or temporary_workers < 0
    or temporary_workers_consolidated < 0

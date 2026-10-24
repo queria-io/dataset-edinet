@@ -11,7 +11,8 @@
 --     接尾辞なし / Row1Member）。この順に優先して 1 つ選ぶ。
 --     連結子会社の指標（…MetricsOfConsolidatedSubsidiaries）は子会社ごとの行で、
 --     数値ファクトに子会社名が無いのでここでは扱わない
---   - 女性役員は FilingDateInstant（提出日時点）
+--   - 女性役員は FilingDateInstant（提出日時点）。FilingDateInstant が無く
+--     CurrentYearInstant にだけ付けた書類はそちらを使う
 -- 同じ element_id × context_id の行が書類内で重複して出ることがある（値は同じ）ので max で潰す。
 with facts as (
     select
@@ -118,8 +119,14 @@ pivoted as (
         max(case when f.element_id = 'jpcrp_cor:AverageLengthOfServiceYearsInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as length_of_service_years,
         max(case when f.element_id = 'jpcrp_cor:AverageLengthOfServiceMonthsInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as length_of_service_months,
         max(case when f.element_id = 'jpcrp_cor:AverageAnnualSalaryInformationAboutReportingCompanyInformationAboutEmployees' then f.numeric_value end) as average_annual_salary,
-        max(case when f.element_id = 'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'FilingDateInstant' then f.numeric_value end) as female_officers,
-        max(case when f.element_id = 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'FilingDateInstant' then f.numeric_value end) as female_officer_ratio
+        coalesce(
+            max(case when f.element_id = 'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'FilingDateInstant' then f.numeric_value end),
+            max(case when f.element_id = 'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'CurrentYearInstant' then f.numeric_value end)
+        ) as female_officers,
+        coalesce(
+            max(case when f.element_id = 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'FilingDateInstant' then f.numeric_value end),
+            max(case when f.element_id = 'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers' and f.context_id = 'CurrentYearInstant' then f.numeric_value end)
+        ) as female_officer_ratio
     from facts as f
     group by f.doc_id
 ),
@@ -152,8 +159,9 @@ select
     -- 年と月で別の要素に分けて開示する会社がある（42 年 6 月 → 42.5）
     round(p.average_age_years + coalesce(p.average_age_months, 0) / 12, 1) as average_age,
     round(p.length_of_service_years + coalesce(p.length_of_service_months, 0) / 12, 1) as average_length_of_service,
-    -- 5,000 万円を超える平均年間給与は桁の入力誤りとみなして落とす（正しい開示の最大は 3,000 万円台）
-    case when p.average_annual_salary < 50000000 then p.average_annual_salary end as average_annual_salary,
+    -- 5,000 万円を超える平均年間給与は桁の入力誤りとみなして落とす（正しい開示の最大は 3,000 万円台）。
+    -- 10 万円未満は千円単位の値を円の欄に入れたもの（4,191 など）なので同じく落とす
+    case when p.average_annual_salary between 100000 and 50000000 then p.average_annual_salary end as average_annual_salary,
     case when m.female_manager_ratio > 1 then m.female_manager_ratio / 100 else m.female_manager_ratio end as female_manager_ratio,
     case when m.female_to_male_wage_ratio > 2 then m.female_to_male_wage_ratio / 100 else m.female_to_male_wage_ratio end as female_to_male_wage_ratio,
     case when m.female_to_male_wage_ratio_regular > 2 then m.female_to_male_wage_ratio_regular / 100 else m.female_to_male_wage_ratio_regular end as female_to_male_wage_ratio_regular,
