@@ -1,0 +1,72 @@
+schema: main
+name: mart_human_capital
+title: EDINET 従業員・女性活躍の指標
+description: 有価証券報告書の「従業員の状況」「女性活躍・育児休業の指標」「役員の状況」を 1 書類 = 1 行にまとめた表。従業員数（連結・提出会社）、平均年齢・平均勤続年数・平均年間給与（提出会社）、管理職に占める女性の割合、男女の賃金の差異、男性の育児休業取得率、女性役員の人数と比率を持つ。値はその有報の当期分だけで、年をまたぐ推移は各年の有報の行を並べて追う。女性活躍・育児休業の指標は 2024 年以降に提出された有報から数値で取れる（2023 年提出分は本文の文章にしか無く、この表では空）。平均年齢・平均勤続年数・平均年間給与と女性役員は 2019 年提出分から入っている。
+published: true
+sources:
+  - path: https://disclosure2.edinet-fsa.go.jp/
+fields:
+  - name: doc_id
+    title: 書類管理番号
+    description: mart_documents / stg_financial_facts と結合できる
+  - name: edinet_code
+    title: 提出者EDINETコード
+    description: mart_companies と結合でき、業種や所在地を引ける
+  - name: sec_code
+    title: 提出者証券コード
+  - name: corporate_number
+    title: 提出者法人番号
+    description: 13桁。houjin_bangou / gbizinfo と結合できる
+    semantic: { role: entity, name: corporate_number }
+  - name: filer_name
+    title: 提出者名
+  - name: period_end
+    title: 当期会計期間（至）
+  - name: fiscal_year
+    title: 会計年度
+    description: period_end の年。mart_business_results の year_offset = 0 の行と同じ数え方
+  - name: submit_date
+    title: 提出日
+  - name: number_of_employees_consolidated
+    title: 従業員数（連結）
+    description: 連結会社の就業人員の合計。連結財務諸表を作らない会社は NULL
+  - name: number_of_employees
+    title: 従業員数（提出会社）
+    description: schema.org の numberOfEmployees にあたる。提出会社単体の就業人員
+  - name: temporary_workers_consolidated
+    title: 平均臨時雇用人員（連結）
+  - name: temporary_workers
+    title: 平均臨時雇用人員（提出会社）
+  - name: average_age
+    title: 平均年齢（提出会社）
+    description: 年。年と月に分けて開示された値は年に換算して足している
+  - name: average_length_of_service
+    title: 平均勤続年数（提出会社）
+    description: 年。年と月に分けて開示された値は年に換算して足している
+  - name: average_annual_salary
+    title: 平均年間給与（提出会社）
+    description: 円。賞与と基準外賃金を含む。5,000 万円を超える値は桁の入力誤りとみなして NULL にしている
+  - name: female_manager_ratio
+    title: 管理職に占める女性労働者の割合（提出会社）
+    description: 0〜1 の比率。% のまま入力された値（1 を超えるもの）は 100 で割って直している
+  - name: female_to_male_wage_ratio
+    title: 男女の賃金の差異（全労働者・提出会社）
+    description: 男性の賃金に対する女性の賃金の割合（0.7 なら女性は男性の 7 割）。% のまま入力された値（2 を超えるもの）は 100 で割って直している
+  - name: female_to_male_wage_ratio_regular
+    title: 男女の賃金の差異（正規雇用労働者・提出会社）
+    description: female_to_male_wage_ratio と同じ定義で、正規雇用労働者だけのもの
+  - name: female_to_male_wage_ratio_non_regular
+    title: 男女の賃金の差異（非正規雇用労働者・提出会社）
+    description: female_to_male_wage_ratio と同じ定義で、非正規雇用労働者だけのもの
+  - name: male_childcare_leave_rate
+    title: 男性労働者の育児休業取得率（全労働者・提出会社）
+    description: 比率。前年度以前に生まれた子の分も数えるため 1 を超えることがある。算出の根拠は male_childcare_leave_rate_basis
+  - name: male_childcare_leave_rate_basis
+    title: 育児休業取得率の算出根拠
+    description: 育児・介護休業法施行規則71条の4第1号（育児休業等の取得割合）、同第2号（育児目的休暇を含む割合）、女性活躍推進法のいずれか。根拠が違う値どうしは定義が違う
+  - name: female_officers
+    title: 女性役員の人数
+    description: 有報提出日時点
+  - name: female_officer_ratio
+    title: 役員に占める女性の比率
+    description: 有報提出日時点。0〜1 の比率。% のまま入力された値（1 を超えるもの）は 100 で割って直している

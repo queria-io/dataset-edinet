@@ -7,6 +7,7 @@
 - ファンドマスタ（`mart_funds`）: ファンドコードリスト（FundcodeDlInfo.csv）。投資信託・ETF 等の特定有価証券のファンドを、1行1ファンドで収録。
 - 財務ファクト（`stg_financial_facts`）: 書類取得 API（type=5 CSV）。有価証券報告書の財務データ本体を、要素ID×コンテキストの縦持ちで生に忠実に収録。
 - 主要経営指標（`mart_business_results`）: 上記を「企業×決算期×標準指標」に正規化したワイドテーブル。
+- 従業員・女性活躍の指標（`mart_human_capital`）: 上記から有報の従業員の状況・女性活躍と育児休業の指標・女性役員を1書類1行にまとめた表。
 
 財務数値は有価証券報告書の XBRL を構造化した CSV（type=5）から取り込みます。書類の本文テキスト（PDF）や添付書類は含みません。財務データは現在、有価証券報告書のみ対象で、四半期・半期報告書は今後対応予定です。提出時点の本体のみで、訂正報告書による訂正は未反映です。全期間は段階的に充填中です。
 
@@ -146,6 +147,49 @@ where sec_code in ('27530', '79740')
 order by filer_name, fiscal_year
 ```
 
+## テーブル: mart_human_capital
+
+有価証券報告書の「従業員の状況」「女性活躍・育児休業の指標」「役員の状況」を、1書類=1行にまとめた表です。値はその有報の当期分だけで、年をまたぐ推移は各年の有報の行を並べて追います。女性活躍・育児休業の指標は、2024年以降に提出された有報から数値で取れます（2023年提出分は本文の文章にしか無く、この表では空です）。平均年齢・平均勤続年数・平均年間給与と女性役員は 2019年提出分から入っています。
+
+主なカラム:
+
+- doc_id / edinet_code / sec_code / corporate_number / filer_name: 識別情報
+- period_end / fiscal_year / submit_date: 当期会計期間（至）/ 会計年度（period_end の年）/ 提出日
+- number_of_employees_consolidated / number_of_employees: 従業員数（連結 / 提出会社）
+- temporary_workers_consolidated / temporary_workers: 平均臨時雇用人員（連結 / 提出会社）
+- average_age / average_length_of_service / average_annual_salary: 平均年齢・平均勤続年数（年）・平均年間給与（円）。提出会社の値
+- female_manager_ratio: 管理職に占める女性労働者の割合（提出会社、0〜1）
+- female_to_male_wage_ratio / _regular / _non_regular: 男女の賃金の差異（男性の賃金に対する女性の賃金の割合。全労働者 / 正規 / 非正規）
+- male_childcare_leave_rate / male_childcare_leave_rate_basis: 男性労働者の育児休業取得率と、その算出根拠（育児・介護休業法施行規則71条の4第1号・第2号、女性活躍推進法のどれか）
+- female_officers / female_officer_ratio: 女性役員の人数と比率（提出日時点）
+
+有報の開示どおりに取り込んだうえで、次のように整えています。
+
+- 男女の賃金の差異に % のまま入力された値（71.4 など）は 100 で割って比率に直す（2 を超える値が対象）
+- 女性管理職比率と女性役員の比率は 1 を超える値を % とみなして 100 で割る
+- 平均年間給与が 5,000 万円を超える値は桁の入力誤りとみなして NULL にする。平均臨時雇用人員の負の値も NULL にする
+- 平均年齢・平均勤続年数を年と月に分けて開示している会社は、年に換算して足す
+- 連結子会社ごとの指標は、数値に子会社名が付いていないので含めない
+
+業種ごとに平均年間給与と男女の賃金の差異を比べる例:
+
+```sql
+with latest as (
+    select *
+    from mart_human_capital
+    qualify row_number() over (partition by edinet_code order by period_end desc, doc_id desc) = 1
+)
+select
+    c.industry,
+    count(*) as companies,
+    median(l.average_annual_salary) as median_salary,
+    median(l.female_to_male_wage_ratio) as median_wage_ratio
+from latest l
+join mart_companies c using (edinet_code)
+group by c.industry
+order by median_salary desc
+```
+
 ## 更新
 
 毎日 EDINET の書類一覧 API を日付単位で取得します。未取得日のみ取得し（進捗は `_source.fetch_progress` に永続化）、直近7日分は書類情報修正・取下げを取り込むため毎回再取得します。
@@ -156,7 +200,7 @@ order by filer_name, fiscal_year
 
 企業マスタ（`mart_companies`）・ファンドマスタ（`mart_funds`）は、それぞれ EDINETコードリスト・ファンドコードリストを毎回全件ダウンロードし、全件入れ替えで最新スナップショットに更新します（APIキー不要）。
 
-財務データ本体（`stg_financial_facts` / `mart_business_results`）は、書類一覧で csvFlag=1 の有価証券報告書を書類取得 API（type=5 CSV）から書類単位で取得します。取得済み書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として再取得しません。新しい提出日から順に充填します。1回の実行の書類数上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象書類種別は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120`=有価証券報告書。四半期 140・半期 160 等へカンマ区切りで拡張可能）で制御します。
+財務データ本体（`stg_financial_facts` / `mart_business_results` / `mart_human_capital`）は、書類一覧で csvFlag=1 の有価証券報告書を書類取得 API（type=5 CSV）から書類単位で取得します。取得済み書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として再取得しません。新しい提出日から順に充填します。1回の実行の書類数上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象書類種別は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120`=有価証券報告書。四半期 140・半期 160 等へカンマ区切りで拡張可能）で制御します。
 
 ## クレジット
 
