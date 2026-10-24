@@ -31,6 +31,7 @@ fields:
     title: 提出者名（ヨミ）
   - name: address
     title: 所在地
+    description: 市区町村名から始まり、都道府県名は付かない。市区町村コードは corporate_number で houjin_bangou と結合すると取れる
   - name: industry
     title: 提出者業種
   - name: sec_code

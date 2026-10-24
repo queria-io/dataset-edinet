@@ -1,8 +1,8 @@
 schema: main
 name: stg_financial_facts
-title: EDINET 財務ファクト（有報・生データ）
+title: EDINET 財務ファクト（有報・半期報告書・生データ）
 description: EDINET 書類取得 API (type=5 CSV) の財務データ本体を生に忠実な縦持ちで保持する ファクトテーブル。要素ID (標準タクソノミ, 例 jppfs_cor:NetSales)
-  を横断比較キーとして 使える。1 行 = 1 要素 × コンテキスト。現状は有価証券報告書 (提出時点の本体) のみ。 訂正報告書による訂正は未反映。全期間は段階的に充填中。
+  を横断比較キーとして 使える。1 行 = 1 要素 × コンテキスト。現状は有価証券報告書と半期報告書 (提出時点の本体) のみで、doc_type_code (120 / 160) で分けられる。 訂正報告書による訂正は未反映。全期間は段階的に充填中。
 published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
@@ -22,9 +22,10 @@ fields:
     title: 提出者名
   - name: doc_type_code
     title: 書類種別コード
+    description: 120=有価証券報告書 / 160=半期報告書
   - name: period_end
     title: 会計期間（至）
-    description: 当該書類の対象会計期間の末日
+    description: 当該書類の対象事業年度の末日。半期報告書（doc_type_code=160）も中間期末ではなく事業年度末
   - name: submit_date
     title: 提出日
   - name: doc_description

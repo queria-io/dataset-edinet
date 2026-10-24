@@ -5,11 +5,11 @@
 - 書類一覧（`mart_documents`）: 書類一覧 API（documents.json, Version 2）。有価証券報告書・四半期報告書・半期報告書・臨時報告書・大量保有報告書・公開買付関連書類などの提出書類を、1行1書類で収録。
 - 企業マスタ（`mart_companies`）: EDINETコードリスト（EdinetcodeDlInfo.csv）。EDINET に提出者として登録された企業・組合・外国法人等を、1行1提出者で収録。
 - ファンドマスタ（`mart_funds`）: ファンドコードリスト（FundcodeDlInfo.csv）。投資信託・ETF 等の特定有価証券のファンドを、1行1ファンドで収録。
-- 財務ファクト（`stg_financial_facts`）: 書類取得 API（type=5 CSV）。有価証券報告書の財務データ本体を、要素ID×コンテキストの縦持ちで生に忠実に収録。
+- 財務ファクト（`stg_financial_facts`）: 書類取得 API（type=5 CSV）。有価証券報告書・半期報告書の財務データ本体を、要素ID×コンテキストの縦持ちで生に忠実に収録。
 - 主要経営指標（`mart_business_results`）: 上記を「企業×決算期×標準指標」に正規化したワイドテーブル。
 - 従業員・女性活躍の指標（`mart_human_capital`）: 上記から有報の従業員の状況・女性活躍と育児休業の指標・女性役員を1書類1行にまとめた表。
 
-財務数値は有価証券報告書の XBRL を構造化した CSV（type=5）から取り込みます。書類の本文テキスト（PDF）や添付書類は含みません。財務データは現在、有価証券報告書のみ対象で、四半期・半期報告書は今後対応予定です。提出時点の本体のみで、訂正報告書による訂正は未反映です。全期間は段階的に充填中です。
+財務数値は有価証券報告書の XBRL を構造化した CSV（type=5）から取り込みます。書類の本文テキスト（PDF）や添付書類は含みません。財務データは有価証券報告書と半期報告書が対象です（`stg_financial_facts` の `doc_type_code` が 120 / 160）。`mart_business_results` と `mart_human_capital` は有価証券報告書だけから作ります。四半期報告書（2024年3月で廃止）は対象外です。提出時点の本体のみで、訂正報告書による訂正は未反映です。全期間は段階的に充填中です。
 
 閲覧可能期間は書類種別ごとに最長10年（縦覧期間＋延長期間）で、それを過ぎた書類は API から取得できなくなります。
 
@@ -54,7 +54,7 @@ EDINET 提出者の企業マスタ。EDINETコード（edinet_code）で `mart_d
 - capital: 資本金（出典CSVの単位のまま）
 - fiscal_year_end: 決算日（"5月31日" 等の月日テキスト）
 - filer_name / filer_name_en / filer_name_kana: 提出者名 / 英字名 / ヨミ
-- address: 所在地
+- address: 所在地（市区町村名から始まり、都道府県名は付かない）
 - industry: 提出者業種
 - sec_code: 証券コード（末尾0付き5桁。非上場は空）
 - corporate_number: 提出者法人番号（13桁。houjin_bangou / gbizinfo と結合可能）
@@ -66,6 +66,19 @@ select d.doc_id, d.filer_name, c.industry, c.listing_status, c.capital
 from mart_documents d
 join mart_companies c using (edinet_code)
 limit 20
+```
+
+本店の市区町村コードは、法人番号で houjin_bangou（国税庁 法人番号公表サイト）につなぐと取れます。上場会社はほぼすべて（2026年10月時点で 3,808 社中 3,805 社）が見つかります。houjin_bangou は登記上の本店の最新の所在地なので、EDINET の `address` と市区町村が食い違う会社が数十社あります（移転や、実際の本社と登記上の本店が違う場合）。`lg_code` で e-Stat などの市区町村別の統計と重ねられます。
+
+市区町村ごとに本店のある上場会社を数える例:
+
+```sql
+select h.lg_code, h.prefecture_name, h.city_name, count(*) as companies
+from edinet.main.mart_companies c
+join houjin_bangou.main.mart_houjin_bangou h using (corporate_number)
+where c.listing_status = '上場'
+group by all
+order by companies desc
 ```
 
 ## テーブル: mart_funds
@@ -93,13 +106,14 @@ limit 20
 
 ## テーブル: stg_financial_facts
 
-有価証券報告書の財務データ本体を、生に忠実な縦持ちファクトで収録します。1行 = 1要素 × コンテキスト。要素ID（`element_id`、XBRL 標準タクソノミ。例 `jppfs_cor:NetSales`）が企業横断比較の鍵です。`doc_id` で `mart_documents` と、`corporate_number` で houjin_bangou / gbizinfo と結合できます。財務本表（jppfs）も企業情報（jpcrp）も主要経営指標（jpcrp の Summary 系）も、絞り込まずすべて収録しています。
+有価証券報告書・半期報告書の財務データ本体を、生に忠実な縦持ちファクトで収録します。1行 = 1要素 × コンテキスト。`doc_type_code`（120=有価証券報告書 / 160=半期報告書）で書類種別を分けられます。半期報告書の値は中間期のもので、`period_end` は中間期末ではなく事業年度末なので、年度の値と混ぜないでください。要素ID（`element_id`、XBRL 標準タクソノミ。例 `jppfs_cor:NetSales`）が企業横断比較の鍵です。`doc_id` で `mart_documents` と、`corporate_number` で houjin_bangou / gbizinfo と結合できます。財務本表（jppfs）も企業情報（jpcrp）も主要経営指標（jpcrp の Summary 系）も、絞り込まずすべて収録しています。
 
 主なカラム:
 
 - doc_id: 書類管理番号（`mart_documents` と結合可能）
 - edinet_code / sec_code / corporate_number / filer_name: 提出者情報（documents から付与）
-- period_end / submit_date: 会計期間（至）/ 提出日
+- doc_type_code: 書類種別コード（120=有価証券報告書 / 160=半期報告書）
+- period_end / submit_date: 事業年度の末日（半期報告書も事業年度末）/ 提出日
 - element_id: 要素ID（XBRL 標準タクソノミ。横断比較の鍵）
 - item_name: 項目名（日本語ラベル）
 - context_id: コンテキストID（期間・連結区分・セグメント次元の識別子。連結/個別は _NonConsolidatedMember、年度は CurrentYear / PriorNYear、セグメントは ..._...Member で判別）
@@ -112,12 +126,13 @@ limit 20
 - csv_type: CSV 様式コード（jpcrp030000-asr=有報本体 / jpaud=監査報告書 / jpsps=投信 等）
 - row_seq: CSV 内の行番号
 
-全社の特定科目を横断抽出する例（連結・当期の総額。セグメント内訳を除くため context_id で絞る）:
+全社の特定科目を横断抽出する例（有報の連結・当期の総額。セグメント内訳を除くため context_id で絞る）:
 
 ```sql
 select edinet_code, filer_name, period_end, numeric_value as net_sales
 from stg_financial_facts
-where element_id = 'jppfs_cor:NetSales'
+where doc_type_code = '120'
+  and element_id = 'jppfs_cor:NetSales'
   and context_id = 'CurrentYearDuration'
 order by numeric_value desc
 limit 20
@@ -200,7 +215,7 @@ order by median_salary desc
 
 企業マスタ（`mart_companies`）・ファンドマスタ（`mart_funds`）は、それぞれ EDINETコードリスト・ファンドコードリストを毎回全件ダウンロードし、全件入れ替えで最新スナップショットに更新します（APIキー不要）。
 
-財務データ本体（`stg_financial_facts` / `mart_business_results` / `mart_human_capital`）は、書類一覧で csvFlag=1 の有価証券報告書を書類取得 API（type=5 CSV）から書類単位で取得します。取得済み書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として再取得しません。新しい提出日から順に充填します。1回の実行の書類数上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象書類種別は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120`=有価証券報告書。四半期 140・半期 160 等へカンマ区切りで拡張可能）で制御します。
+財務データ本体（`stg_financial_facts` / `mart_business_results` / `mart_human_capital`）は、書類一覧で csvFlag=1 の有価証券報告書・半期報告書を書類取得 API（type=5 CSV）から書類単位で取得します。取得済み書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として再取得しません。新しい提出日から順に充填します。1回の実行の書類数上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象書類種別は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120,160`=有価証券報告書・半期報告書。四半期 140・訂正有報 130 等へカンマ区切りで拡張可能）で制御します。
 
 ## クレジット
 
