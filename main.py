@@ -137,8 +137,9 @@ RECENT_REFETCH_DAYS = 7
 DEFAULT_MAX_DATES_PER_RUN = 1000
 
 # 財務ファクト取り込みの既定。対象書類種別 (docTypeCode) はカンマ区切りで上書き可
-# （120=有価証券報告書。140=四半期報告書, 160=半期報告書, 130=訂正有報 等へ拡張可能）。
-DEFAULT_FINANCIAL_DOC_TYPES = "120"
+# （120=有価証券報告書、160=半期報告書。140=四半期報告書, 130=訂正有報 等へ拡張可能）。
+# 上場会社は 2024 年 4 月以降、四半期報告書が廃止され半期報告書に一本化された。
+DEFAULT_FINANCIAL_DOC_TYPES = "120,160"
 # 1 回の実行で財務 CSV を取得する書類数の上限（type=5 は documents より重い）。
 DEFAULT_MAX_DOCS_PER_RUN = 1000
 # 何書類分をまとめて 1 トランザクションでコミットするか。1 書類ごとの COMMIT を
@@ -381,7 +382,7 @@ def _docs_to_fetch(
 ) -> list[str]:
     """財務 CSV 未取得の対象書類 docID を提出日時の新しい順に返す（上限あり）。
 
-    対象は ``EDINET_FINANCIAL_DOC_TYPES``（既定 120=有報）かつ csvFlag=1 かつ未取下げ。
+    対象は ``EDINET_FINANCIAL_DOC_TYPES``（既定 120=有報・160=半期報告書）かつ csvFlag=1 かつ未取下げ。
     ``financial_fetch_progress`` に登録済みの書類は除外する（空 CSV も status='empty'
     で登録済みなので再取得しない）。1 回の実行を ``EDINET_MAX_DOCS_PER_RUN`` 件に収める。
     """

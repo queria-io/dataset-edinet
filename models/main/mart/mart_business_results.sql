@@ -32,6 +32,8 @@ with summary as (
         end as year_offset
     from {{ ref('stg_financial_facts') }}
     where element_id like 'jpcrp\_cor:%SummaryOfBusinessResults' escape '\'
+      -- 有報だけ。半期報告書の主要な経営指標は中間期の値で、年度の値と混ぜられない
+      and doc_type_code = '120'
 ),
 
 -- 提出日時点など5期比較外（year_offset 不明）は除外

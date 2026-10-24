@@ -9,7 +9,7 @@
 - 主要経営指標（`mart_business_results`）: 上記を「企業×決算期×標準指標」に正規化したワイドテーブル。
 - 従業員・女性活躍の指標（`mart_human_capital`）: 上記から有報の従業員の状況・女性活躍と育児休業の指標・女性役員を1書類1行にまとめた表。
 
-財務数値は有価証券報告書の XBRL を構造化した CSV（type=5）から取り込みます。書類の本文テキスト（PDF）や添付書類は含みません。財務データは現在、有価証券報告書のみ対象で、四半期・半期報告書は今後対応予定です。提出時点の本体のみで、訂正報告書による訂正は未反映です。全期間は段階的に充填中です。
+財務数値は有価証券報告書の XBRL を構造化した CSV（type=5）から取り込みます。書類の本文テキスト（PDF）や添付書類は含みません。財務データは有価証券報告書と半期報告書が対象です（`stg_financial_facts` の `doc_type_code` が 120 / 160）。`mart_business_results` と `mart_human_capital` は有価証券報告書だけから作ります。四半期報告書（2024年3月で廃止）は対象外です。提出時点の本体のみで、訂正報告書による訂正は未反映です。全期間は段階的に充填中です。
 
 閲覧可能期間は書類種別ごとに最長10年（縦覧期間＋延長期間）で、それを過ぎた書類は API から取得できなくなります。
 
@@ -213,7 +213,7 @@ order by median_salary desc
 
 企業マスタ（`mart_companies`）・ファンドマスタ（`mart_funds`）は、それぞれ EDINETコードリスト・ファンドコードリストを毎回全件ダウンロードし、全件入れ替えで最新スナップショットに更新します（APIキー不要）。
 
-財務データ本体（`stg_financial_facts` / `mart_business_results` / `mart_human_capital`）は、書類一覧で csvFlag=1 の有価証券報告書を書類取得 API（type=5 CSV）から書類単位で取得します。取得済み書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として再取得しません。新しい提出日から順に充填します。1回の実行の書類数上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象書類種別は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120`=有価証券報告書。四半期 140・半期 160 等へカンマ区切りで拡張可能）で制御します。
+財務データ本体（`stg_financial_facts` / `mart_business_results` / `mart_human_capital`）は、書類一覧で csvFlag=1 の有価証券報告書・半期報告書を書類取得 API（type=5 CSV）から書類単位で取得します。取得済み書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として再取得しません。新しい提出日から順に充填します。1回の実行の書類数上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象書類種別は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120,160`=有価証券報告書・半期報告書。四半期 140・訂正有報 130 等へカンマ区切りで拡張可能）で制御します。
 
 ## クレジット
 
