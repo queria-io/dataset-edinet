@@ -27,14 +27,20 @@ with facts as (
         numeric_value
     from {{ ref('stg_financial_facts') }}
     where numeric_value is not null
+      -- 有報だけ（EDINET_FINANCIAL_DOC_TYPES で半期報告書などを足しても混ぜない）
+      and doc_type_code = '120'
       and (
           element_id in (
               'jpcrp_cor:NumberOfEmployees',
               'jpcrp_cor:AverageNumberOfTemporaryWorkers',
+              'jpcrp_cor:AverageAgeYearsInformationAboutReportingCompanyInformationAboutEmployees',
+              'jpcrp_cor:AverageAgeMonthsInformationAboutReportingCompanyInformationAboutEmployees',
+              'jpcrp_cor:AverageLengthOfServiceYearsInformationAboutReportingCompanyInformationAboutEmployees',
+              'jpcrp_cor:AverageLengthOfServiceMonthsInformationAboutReportingCompanyInformationAboutEmployees',
+              'jpcrp_cor:AverageAnnualSalaryInformationAboutReportingCompanyInformationAboutEmployees',
               'jpcrp_cor:NumberOfFemaleDirectorsAndOtherOfficers',
               'jpcrp_cor:RatioOfFemaleDirectorsAndOtherOfficers'
           )
-          or element_id like 'jpcrp\_cor:%InformationAboutReportingCompanyInformationAboutEmployees' escape '\'
           or element_id like 'jpcrp\_cor:%MetricsOfReportingCompany' escape '\'
       )
 ),
@@ -91,9 +97,9 @@ childcare as (
     group by doc_id
 ),
 
--- 割合の列には % のまま入力された値（71.4 など）が混じる。賃金の差異と女性管理職比率は
--- 定義上 1 を大きく超えないので、2 を超える値は % とみなして 100 で割る。
--- 女性役員比率は 1 を超えないので、1 を超える値を % とみなす
+-- 割合の列には % のまま入力された値（71.4 など）が混じる。賃金の差異は女性の方が高い
+-- 会社で 1 を少し超えうるので、2 を超える値を % とみなして 100 で割る。
+-- 女性管理職比率と女性役員比率は定義上 1 を超えないので、1 を超える値を % とみなす
 pivoted as (
     select
         f.doc_id,
@@ -148,7 +154,7 @@ select
     round(p.length_of_service_years + coalesce(p.length_of_service_months, 0) / 12, 1) as average_length_of_service,
     -- 5,000 万円を超える平均年間給与は桁の入力誤りとみなして落とす（正しい開示の最大は 3,000 万円台）
     case when p.average_annual_salary < 50000000 then p.average_annual_salary end as average_annual_salary,
-    case when m.female_manager_ratio > 2 then m.female_manager_ratio / 100 else m.female_manager_ratio end as female_manager_ratio,
+    case when m.female_manager_ratio > 1 then m.female_manager_ratio / 100 else m.female_manager_ratio end as female_manager_ratio,
     case when m.female_to_male_wage_ratio > 2 then m.female_to_male_wage_ratio / 100 else m.female_to_male_wage_ratio end as female_to_male_wage_ratio,
     case when m.female_to_male_wage_ratio_regular > 2 then m.female_to_male_wage_ratio_regular / 100 else m.female_to_male_wage_ratio_regular end as female_to_male_wage_ratio_regular,
     case when m.female_to_male_wage_ratio_non_regular > 2 then m.female_to_male_wage_ratio_non_regular / 100 else m.female_to_male_wage_ratio_non_regular end as female_to_male_wage_ratio_non_regular,
@@ -161,6 +167,10 @@ left join reporting_metrics as m using (doc_id)
 left join childcare as c using (doc_id)
 -- 人的資本の項目が 1 つも無い書類（投資法人など）は落とす
 where coalesce(
-    p.number_of_employees_consolidated, p.number_of_employees, p.average_annual_salary,
-    m.female_manager_ratio, m.female_to_male_wage_ratio, c.male_childcare_leave_rate, p.female_officer_ratio
+    p.number_of_employees_consolidated, p.number_of_employees,
+    p.temporary_workers_consolidated, p.temporary_workers,
+    p.average_age_years, p.length_of_service_years, p.average_annual_salary,
+    m.female_manager_ratio, m.female_to_male_wage_ratio,
+    m.female_to_male_wage_ratio_regular, m.female_to_male_wage_ratio_non_regular,
+    c.male_childcare_leave_rate, p.female_officers, p.female_officer_ratio
 ) is not null
