@@ -92,7 +92,8 @@ childcare as (
 ),
 
 -- 割合の列には % のまま入力された値（71.4 など）が混じる。賃金の差異と女性管理職比率は
--- 定義上 1 を大きく超えないので、2 を超える値は % とみなして 100 で割る
+-- 定義上 1 を大きく超えないので、2 を超える値は % とみなして 100 で割る。
+-- 女性役員比率は 1 を超えないので、1 を超える値を % とみなす
 pivoted as (
     select
         f.doc_id,
@@ -139,13 +140,14 @@ select
     p.submit_date,
     p.number_of_employees_consolidated::bigint as number_of_employees_consolidated,
     p.number_of_employees::bigint as number_of_employees,
-    p.temporary_workers_consolidated::bigint as temporary_workers_consolidated,
-    p.temporary_workers::bigint as temporary_workers,
+    -- 人数が負の値は入力誤りなので落とす
+    case when p.temporary_workers_consolidated >= 0 then p.temporary_workers_consolidated::bigint end as temporary_workers_consolidated,
+    case when p.temporary_workers >= 0 then p.temporary_workers::bigint end as temporary_workers,
     -- 年と月で別の要素に分けて開示する会社がある（42 年 6 月 → 42.5）
     round(p.average_age_years + coalesce(p.average_age_months, 0) / 12, 1) as average_age,
     round(p.length_of_service_years + coalesce(p.length_of_service_months, 0) / 12, 1) as average_length_of_service,
-    -- 1 億円を超える平均年間給与は単位の入力誤り（千円単位の値を円で入れたもの等）とみなして落とす
-    case when p.average_annual_salary < 100000000 then p.average_annual_salary end as average_annual_salary,
+    -- 5,000 万円を超える平均年間給与は桁の入力誤りとみなして落とす（正しい開示の最大は 3,000 万円台）
+    case when p.average_annual_salary < 50000000 then p.average_annual_salary end as average_annual_salary,
     case when m.female_manager_ratio > 2 then m.female_manager_ratio / 100 else m.female_manager_ratio end as female_manager_ratio,
     case when m.female_to_male_wage_ratio > 2 then m.female_to_male_wage_ratio / 100 else m.female_to_male_wage_ratio end as female_to_male_wage_ratio,
     case when m.female_to_male_wage_ratio_regular > 2 then m.female_to_male_wage_ratio_regular / 100 else m.female_to_male_wage_ratio_regular end as female_to_male_wage_ratio_regular,
@@ -153,7 +155,7 @@ select
     c.male_childcare_leave_rate,
     c.male_childcare_leave_rate_basis,
     p.female_officers::integer as female_officers,
-    p.female_officer_ratio
+    case when p.female_officer_ratio > 1 then p.female_officer_ratio / 100 else p.female_officer_ratio end as female_officer_ratio
 from pivoted as p
 left join reporting_metrics as m using (doc_id)
 left join childcare as c using (doc_id)
