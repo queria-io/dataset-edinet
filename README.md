@@ -54,7 +54,7 @@ EDINET 提出者の企業マスタ。EDINETコード（edinet_code）で `mart_d
 - capital: 資本金（出典CSVの単位のまま）
 - fiscal_year_end: 決算日（"5月31日" 等の月日テキスト）
 - filer_name / filer_name_en / filer_name_kana: 提出者名 / 英字名 / ヨミ
-- address: 所在地
+- address: 所在地（市区町村名から始まり、都道府県名は付かない）
 - industry: 提出者業種
 - sec_code: 証券コード（末尾0付き5桁。非上場は空）
 - corporate_number: 提出者法人番号（13桁。houjin_bangou / gbizinfo と結合可能）
@@ -66,6 +66,19 @@ select d.doc_id, d.filer_name, c.industry, c.listing_status, c.capital
 from mart_documents d
 join mart_companies c using (edinet_code)
 limit 20
+```
+
+本店の市区町村コードは、法人番号で houjin_bangou（国税庁 法人番号公表サイト）につなぐと取れます。上場会社はほぼすべて（2026年10月時点で 3,808 社中 3,805 社）が見つかります。houjin_bangou は登記上の本店の最新の所在地なので、EDINET の `address` と市区町村が食い違う会社が数十社あります（移転や、実際の本社と登記上の本店が違う場合）。`lg_code` で e-Stat などの市区町村別の統計と重ねられます。
+
+市区町村ごとに本店のある上場会社を数える例:
+
+```sql
+select h.lg_code, h.prefecture_name, h.city_name, count(*) as companies
+from edinet.main.mart_companies c
+join houjin_bangou.main.mart_houjin_bangou h using (corporate_number)
+where c.listing_status = '上場'
+group by all
+order by companies desc
 ```
 
 ## テーブル: mart_funds
