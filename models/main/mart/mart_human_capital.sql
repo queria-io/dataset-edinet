@@ -28,7 +28,7 @@ with facts as (
         numeric_value
     from {{ ref('stg_financial_facts') }}
     where numeric_value is not null
-      -- 有報だけ（EDINET_FINANCIAL_DOC_TYPES で半期報告書などを足しても混ぜない）
+      -- 有報だけ（stg_financial_facts の半期報告書 160 などは混ぜない）
       and doc_type_code = '120'
       and (
           element_id in (
