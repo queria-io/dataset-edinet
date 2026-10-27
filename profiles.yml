@@ -14,6 +14,11 @@ edinet:
       # ときにしか決められず、SET では変えられない
       config_options:
         custom_user_agent: "{{ env_var('QUERIA_USER_AGENT', '') }}"
+      # financial_facts の parquet は大きく、回線によっては既定（1 リクエスト 30 秒）で
+      # 読み切れず mart のビルドが落ちる（GitHub のランナー以外から回すとき）
+      settings:
+        http_timeout: 300
+        http_retries: 5
       extensions:
         - httpfs
         - ducklake
