@@ -1,7 +1,8 @@
 schema: main
 name: mart_documents
 title: EDINET 書類一覧
-description: EDINET 提出書類一覧（有価証券報告書・四半期報告書・大量保有報告書等のメタデータ。法人番号付き）
+description: |-
+  EDINET に提出された書類（有価証券報告書・四半期報告書・大量保有報告書など）のメタデータです。1 行が 1 書類で、提出者の法人番号を持ちます。
 published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/

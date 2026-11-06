@@ -1,7 +1,8 @@
 schema: main
 name: mart_funds
 title: EDINET ファンドマスタ
-description: EDINET ファンドマスタ（ファンドコードリスト。投資信託・ETF等の特定有価証券のファンド名・区分・発行者。1行1ファンド）
+description: |-
+  EDINET のファンドのマスタ（ファンドコードリスト）です。1 行が 1 ファンドで、投資信託・ETF などのファンド名・区分・発行者を持ちます。
 published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
