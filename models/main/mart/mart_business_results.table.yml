@@ -1,9 +1,11 @@
 schema: main
 name: mart_business_results
 title: EDINET 主要経営指標（正規化）
-description: 有報「主要な経営指標等の推移」(jpcrp_cor:*SummaryOfBusinessResults) を 「企業×会計年度×標準指標」に pivot した正規化済みワイドテーブル。連結優先
-  （連結があれば連結、無ければ個別）で 1 書類×会計年度=1 行。会計基準 (JP GAAP / IFRS) を問わず同じ列に揃え（IFRS 採用企業は RevenueIFRS 等の 要素を JP GAAP
-  名と統合）、複数社・複数年の指標比較に使える。 1 書類あたり最大5会計年度分（当期〜四期前）の行を持つ。
+description: |-
+  有価証券報告書の「主要な経営指標等の推移」を、会計基準をまたいで同じ列に統一したものです。1 行が 1 書類・1 会計年度で、1 書類あたり最大 5 会計年度分あります。
+
+  - 連結の値があれば連結、無ければ個別の値です
+  - IFRS 採用企業の値（RevenueIFRS など）は JP GAAP の列に統合しています
 published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
@@ -23,7 +25,7 @@ fields:
     title: 当期会計期間（至）
   - name: year_offset
     title: 年度オフセット
-    description: 当期=0 / 前期=-1 / 前々期=-2 / 三期前=-3 / 四期前=-4（コンテキストIDから導出）
+    description: 当期=0 / 前期=-1 / … / 四期前=-4
   - name: fiscal_year
     title: 会計年度
     description: period_end の年 + year_offset で算出した実年度
@@ -51,14 +53,14 @@ fields:
     title: 発行済株式総数
   - name: net_assets_per_share
     title: 1株当たり純資産（BPS）
-    description: IFRS 採用企業は1株当たり親会社所有者帰属持分。 外貨建て（USD）で開示された値はこの列に含めない
+    description: IFRS 採用企業は 1 株当たり親会社所有者帰属持分。外貨建ては含まない
   - name: basic_eps
     title: 1株当たり当期純利益（EPS）
   - name: diluted_eps
     title: 潜在株式調整後EPS
   - name: equity_to_asset_ratio
     title: 自己資本比率
-    description: 総資産に占める自己資本の割合。0〜1 の比率で、債務超過の場合は負値になる。 IFRS 採用企業は親会社所有者帰属持分比率
+    description: 0〜1 の比率。債務超過なら負。IFRS は親会社所有者帰属持分比率
   - name: roe
     title: 自己資本利益率（ROE）
   - name: per

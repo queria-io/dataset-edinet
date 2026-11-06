@@ -1,7 +1,8 @@
 schema: main
 name: mart_companies
 title: EDINET 企業マスタ
-description: EDINET 企業マスタ（EDINETコードリスト。提出者の業種・市場区分・資本金・決算日・法人番号等。1行1提出者）
+description: |-
+  EDINET の提出者のマスタ（EDINETコードリスト）です。1 行が 1 提出者で、業種・市場区分・資本金・決算日・法人番号を持ちます。
 published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
@@ -31,7 +32,7 @@ fields:
     title: 提出者名（ヨミ）
   - name: address
     title: 所在地
-    description: 市区町村名から始まり、都道府県名は付かない。市区町村コードは corporate_number で houjin_bangou と結合すると取れる
+    description: 市区町村名から始まり、都道府県名は付かない
   - name: industry
     title: 提出者業種
   - name: sec_code
