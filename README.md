@@ -9,7 +9,7 @@
 | 書類一覧 API（documents.json、Version 2） | `main.mart_documents` |
 | EDINETコードリスト（EdinetcodeDlInfo.csv） | `main.mart_companies` |
 | ファンドコードリスト（FundcodeDlInfo.csv） | `main.mart_funds` |
-| 書類取得 API（type=5 の CSV。XBRL を構造化したもの） | `main.stg_financial_facts`・`main.mart_business_results`・`main.mart_human_capital` |
+| 書類取得 API（type=5 の CSV。XBRL を構造化したもの） | `main.stg_financial_facts`・`main.mart_business_results`・`main.mart_human_capital`・`main.mart_company_profiles` |
 
 - [EDINET の利用規約](https://disclosure2.edinet-fsa.go.jp/)に従います
 - このサービスは、金融庁 EDINET の書類一覧 API・書類取得 API・EDINETコードリスト・ファンドコードリストを使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません
@@ -24,6 +24,7 @@
 | `main.stg_financial_facts` | 1 行が 1 要素・1 コンテキスト。有価証券報告書・半期報告書の財務データの本体 |
 | `main.mart_business_results` | 1 行が 1 書類・1 会計年度。有報の主要経営指標を会計基準をまたいで統一したもの |
 | `main.mart_human_capital` | 1 行が 1 書類。有報の従業員の状況・女性活躍と育児休業の指標・女性役員 |
+| `main.mart_company_profiles` | 1 行が 1 書類。有報の表紙（会社名・英訳名・本店の所在の場所・電話番号・最寄りの連絡場所）と連結子会社の数・研究開発費 |
 
 テーブルの結合:
 
@@ -83,9 +84,18 @@ GROUP BY c.industry
 ORDER BY median_salary DESC;
 ```
 
+電話番号から会社を探す（数字だけにした列で比べます）:
+
+```sql
+SELECT edinet_code, company_name, head_office_address, submit_date
+FROM edinet.main.mart_company_profiles
+WHERE head_office_phone_digits = '0364358440'
+ORDER BY submit_date DESC;
+```
+
 ## 収録範囲の注意
 
-- 財務データは有価証券報告書と半期報告書が対象です（`stg_financial_facts` の `doc_type_code` が 120 / 160）。`mart_business_results` と `mart_human_capital` は有価証券報告書だけから作っています。四半期報告書（2024 年 3 月で廃止）は対象外です
+- 財務データは有価証券報告書と半期報告書が対象です（`stg_financial_facts` の `doc_type_code` が 120 / 160）。`mart_business_results`・`mart_human_capital`・`mart_company_profiles` は有価証券報告書だけから作っています。四半期報告書（2024 年 3 月で廃止）は対象外です
 - 提出時点の本体だけで、訂正報告書による訂正は反映していません。過去の書類は新しい提出日から順に取り込んでいる途中で、全期間はまだそろっていません
 - 書類の本文（PDF）や添付書類は含みません
 - EDINET の閲覧可能期間は書類の種類ごとに最長 10 年（縦覧期間と延長期間）で、それを過ぎた書類は取得できません
@@ -97,6 +107,7 @@ ORDER BY median_salary DESC;
 - `context_id` は期間・連結区分・セグメントを表します。個別は `_NonConsolidatedMember` が付き、年度は `CurrentYear`・`PriorNYear` で分かれます
 - 半期報告書の値は中間期のものですが、`period_end` は中間期末ではなく事業年度末です。年度の値と混ぜないでください
 - `mart_business_results` は、連結の値があれば連結、無ければ個別の値です。IFRS 採用企業の値（RevenueIFRS など）は JP GAAP の列に統合しています。1 書類あたり当期から四期前までの最大 5 会計年度分の行があるので、同じ会計年度が複数の書類に出てきます。各年の有報の当期の値だけを使うときは `year_offset = 0` で絞ってください
+- `mart_company_profiles` の表紙の値は提出日時点の記載のままです。電話番号の数字列（`head_office_phone_digits`）は、市外局番の無い記載（「東京(3352)1439」）や番号が 2 つある記載では NULL です。代表者・事務連絡者の氏名は含みません
 - 1 株当たり純資産は、IFRS 採用企業では 1 株当たり親会社所有者帰属持分です。外貨建て（USD）で開示された値は含みません。自己資本比率は 0〜1 の比率で、債務超過なら負の値です
 
 ## 従業員・女性活躍の指標の注意
