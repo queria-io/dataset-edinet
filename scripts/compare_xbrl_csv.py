@@ -1,6 +1,6 @@
 """type=1 のインスタンスから読んだ値と、type=5 の CSV を書類ごとに突き合わせる（試作の確認用）。
 
-    EDINET_API_KEY=... uv run python scripts/compare_xbrl_csv.py S100YM3K S100YLZQ
+    EDINET_API_KEY=... PYTHONPATH=. uv run python scripts/compare_xbrl_csv.py S100YM3K S100YLZQ
 
 出力: 書類ごとの件数と差分、CSV の列（相対年度・連結/個別・期間/時点・単位）が
 インスタンスの何から決まるかの対応表。
@@ -28,8 +28,8 @@ def compare(client: EdinetClient, doc_id: str) -> Counter:
     instance = instance_from_zip(client.get_document_xbrl(doc_id) or b"")
     contexts, facts = parse_instance(instance or b"")
     csv_rows = _csv_rows(client, doc_id)
-    by_key = {(f.element_id, f.context_id, f.unit_id or ""): f for f in facts}
-    csv_keys = {(r[0], r[2], r[6] or ""): r for r in csv_rows}
+    by_key = {(f.element_id, f.context_id): f for f in facts}
+    csv_keys = {(r[0], r[2]): r for r in csv_rows}
     only_csv = csv_keys.keys() - by_key.keys()
     only_xbrl = by_key.keys() - csv_keys.keys()
     differ = [
@@ -37,7 +37,7 @@ def compare(client: EdinetClient, doc_id: str) -> Counter:
         for k in csv_keys.keys() & by_key.keys()
         if not k[0].endswith("TextBlock")
         and not by_key[k].is_nil
-        and (csv_keys[k][8] or "") != (by_key[k].value or "").strip()
+        and (csv_keys[k][8] or "") != (by_key[k].value or "")
     ]
     print(f"{doc_id}: csv {len(csv_rows)} xbrl {len(facts)} only_csv {len(only_csv)} "
           f"only_xbrl {len(only_xbrl)} value_differs {len(differ)}")
