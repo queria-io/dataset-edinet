@@ -155,7 +155,9 @@ _XBRL_CONTEXTS_ARROW_SCHEMA = pa.schema(
 
 _LABEL_FIELDS = [("element_id", pa.string()), ("role", pa.string()), ("lang", pa.string()), ("label", pa.string())]
 _XBRL_LABELS_ARROW_SCHEMA = pa.schema([("doc_id", pa.string()), *_LABEL_FIELDS])
-_TAXONOMY_LABELS_ARROW_SCHEMA = pa.schema([("release", pa.string()), ("namespace", pa.string()), *_LABEL_FIELDS])
+_TAXONOMY_LABELS_ARROW_SCHEMA = pa.schema(
+    [("release", pa.string()), ("namespace", pa.string()), ("file", pa.string()), *_LABEL_FIELDS]
+)
 _XBRL_NAMESPACES_ARROW_SCHEMA = pa.schema(
     [("doc_id", pa.string()), ("prefix", pa.string()), ("uri", pa.string())]
 )
@@ -550,8 +552,8 @@ def ingest_taxonomy(conn: duckdb.DuckDBPyConnection) -> None:
         return
     for release, url in releases:
         rows = [
-            {"release": release, "namespace": ns, "element_id": e, "role": r, "lang": lang, "label": text}
-            for ns, e, r, lang, text in taxonomy.release_labels(taxonomy.fetch(url))
+            {"release": release, "namespace": ns, "file": f, "element_id": e, "role": r, "lang": lang, "label": text}
+            for ns, f, e, r, lang, text in taxonomy.release_labels(taxonomy.fetch(url))
         ]
         conn.execute("BEGIN")
         conn.register("_batch", pa.Table.from_pylist(rows, schema=_TAXONOMY_LABELS_ARROW_SCHEMA))
@@ -740,7 +742,7 @@ def _ensure_xbrl_tables(conn: duckdb.DuckDBPyConnection) -> None:
     )
     labels = "element_id VARCHAR, role VARCHAR, lang VARCHAR, label VARCHAR"
     conn.execute(f"CREATE TABLE IF NOT EXISTS {XBRL_LABELS_TABLE} (doc_id VARCHAR, {labels})")
-    conn.execute(f"CREATE TABLE IF NOT EXISTS {TAXONOMY_LABELS_TABLE} (release VARCHAR, namespace VARCHAR, {labels})")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {TAXONOMY_LABELS_TABLE} (release VARCHAR, namespace VARCHAR, file VARCHAR, {labels})")
     conn.execute(f"CREATE TABLE IF NOT EXISTS {XBRL_NAMESPACES_TABLE} (doc_id VARCHAR, prefix VARCHAR, uri VARCHAR)")
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {XBRL_PROGRESS_TABLE} "
