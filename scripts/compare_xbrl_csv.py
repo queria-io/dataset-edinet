@@ -26,7 +26,7 @@ def _csv_rows(client: EdinetClient, doc_id: str) -> list[list[str | None]]:
 
 def compare(client: EdinetClient, doc_id: str) -> Counter:
     instance = instance_from_zip(client.get_document_xbrl(doc_id) or b"")
-    contexts, facts = parse_instance(instance or b"")
+    _, contexts, facts = parse_instance(instance or b"")
     csv_rows = _csv_rows(client, doc_id)
     by_key = {(f.element_id, f.context_id): f for f in facts}
     csv_keys = {(r[0], r[2]): r for r in csv_rows}

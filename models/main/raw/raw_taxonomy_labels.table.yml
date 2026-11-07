@@ -5,6 +5,8 @@ published: false
 fields:
   - name: release
     description: 年版（2026 など）
+  - name: namespace
+    description: ラベルのファイルのあるモジュールと日付（jppfs/2025-11-01 など）。書類の名前空間の URI と突き合わせる
   - name: element_id
     description: 要素またはメンバーの ID
   - name: role

@@ -16,45 +16,65 @@ xbrl_docs as (
     select distinct doc_id from {{ ref('raw_xbrl_facts') }}
 ),
 
--- 標準の要素の名前は、その要素を持つ最も新しい年版のタクソノミから取る
-taxonomy_names as (
-    select element_id, label
+-- 項目名は CSV と同じく冗長ラベル（「売上高、営業収益」など）を使い、無ければ標準ラベル。
+-- 標準の要素は、書類の名前空間と同じモジュール・日付のタクソノミのラベルを当てる。
+-- 同じ名前空間のラベルが複数の年版にあるときは新しい年版を使う
+label_candidates as (
+    select
+        namespace,
+        element_id,
+        label,
+        release,
+        role = 'http://www.xbrl.org/2003/role/verboseLabel' as is_verbose
     from {{ ref('raw_taxonomy_labels') }}
-    where role = 'http://www.xbrl.org/2003/role/label' and lang = 'ja'
-    qualify row_number() over (partition by element_id order by release desc) = 1
+    where lang = 'ja'
+        and role in ('http://www.xbrl.org/2003/role/verboseLabel', 'http://www.xbrl.org/2003/role/label')
+),
+
+taxonomy_names as (
+    select namespace, element_id, label
+    from label_candidates
+    qualify row_number() over (
+        partition by namespace, element_id order by is_verbose desc, release desc
+    ) = 1
+),
+
+-- 書類と同じ名前空間に無い要素（年版の間で名前空間の日付がずれたもの）は、最も新しい年版から取る
+latest_names as (
+    select element_id, label
+    from label_candidates
+    qualify row_number() over (
+        partition by element_id order by is_verbose desc, release desc
+    ) = 1
 ),
 
 company_names as (
     select doc_id, element_id, label
     from {{ ref('raw_xbrl_labels') }}
-    where role = 'http://www.xbrl.org/2003/role/label' and lang = 'ja'
-    qualify row_number() over (partition by doc_id, element_id order by label) = 1
+    where lang = 'ja'
+        and role in ('http://www.xbrl.org/2003/role/verboseLabel', 'http://www.xbrl.org/2003/role/label')
+    qualify row_number() over (
+        partition by doc_id, element_id
+        order by role = 'http://www.xbrl.org/2003/role/verboseLabel' desc, label
+    ) = 1
+),
+
+doc_namespaces as (
+    select
+        doc_id,
+        prefix,
+        regexp_extract(uri, '/taxonomy/([^/]+/[0-9]{4}-[0-9]{2}-[0-9]{2})/', 1) as namespace
+    from {{ ref('raw_xbrl_namespaces') }}
 ),
 
 xbrl as (
     select
         f.doc_id,
         f.element_id,
-        coalesce(cn.label, tn.label) as item_name,
+        coalesce(cn.label, tn.label, ln.label) as item_name,
         f.context_id,
         -- context ID の頭は EDINET の命名規約で相対年度を表す
-        case split_part(f.context_id, '_', 1)
-            when 'CurrentYearDuration' then '当期'
-            when 'CurrentYearInstant' then '当期末'
-            when 'Prior1YearDuration' then '前期'
-            when 'Prior1YearInstant' then '前期末'
-            when 'Prior2YearDuration' then '前々期'
-            when 'Prior2YearInstant' then '前々期末'
-            when 'Prior3YearDuration' then '三期前'
-            when 'Prior3YearInstant' then '三期前時点'
-            when 'Prior4YearDuration' then '四期前'
-            when 'Prior4YearInstant' then '四期前時点'
-            when 'FilingDateInstant' then '提出日時点'
-            when 'InterimDuration' then '当中間期'
-            when 'InterimInstant' then '当中間期末'
-            when 'Prior1InterimDuration' then '前中間期'
-            when 'Prior1InterimInstant' then '前中間期末'
-        end as relative_year,
+        ry.relative_year,
         -- CSV と同じく、日本基準の財務諸表 (jppfs_cor) だけを連結 / 個別に分ける
         case
             when f.element_id not like 'jppfs\_cor:%' escape '\' then 'その他'
@@ -77,8 +97,14 @@ xbrl as (
         on f.doc_id = c.doc_id and f.context_id = c.context_id
     left join company_names as cn
         on f.doc_id = cn.doc_id and f.element_id = cn.element_id
+    left join doc_namespaces as ns
+        on f.doc_id = ns.doc_id and split_part(f.element_id, ':', 1) = ns.prefix
     left join taxonomy_names as tn
-        on f.element_id = tn.element_id
+        on ns.namespace = tn.namespace and f.element_id = tn.element_id
+    left join latest_names as ln
+        on f.element_id = ln.element_id
+    left join {{ ref('context_relative_years') }} as ry
+        on split_part(f.context_id, '_', 1) = ry.context_prefix
 ),
 
 csv as (

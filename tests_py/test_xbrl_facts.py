@@ -23,7 +23,8 @@ INSTANCE = b"""<?xml version="1.0" encoding="UTF-8"?>
 
 
 def test_parse_instance():
-    contexts, facts = parse_instance(INSTANCE)
+    namespaces, contexts, facts = parse_instance(INSTANCE)
+    assert namespaces["jppfs_cor"] == "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2025-11-01/jppfs_cor"
     assert contexts["CurrentYearDuration_NonConsolidatedMember"].members == (
         ("jppfs_cor:ConsolidatedOrNonConsolidatedAxis", "jppfs_cor:NonConsolidatedMember"),
     )

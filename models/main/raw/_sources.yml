@@ -19,6 +19,8 @@ sources:
         description: XBRL インスタンスの context（期間と、軸・メンバーの組）
       - name: xbrl_labels
         description: type=1 の ZIP の会社独自のラベル（_lab.xml）。会社独自の要素とメンバー（セグメントなど）の名前
+      - name: xbrl_namespaces
+        description: XBRL インスタンスの名前空間の接頭辞と URI
       - name: taxonomy_labels
         description: 金融庁が公表した EDINET タクソノミの年版ごとのラベル（標準の要素とメンバーの名前）
       - name: affiliated_entities

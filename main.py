@@ -50,6 +50,7 @@ FINANCIAL_PROGRESS_TABLE = "edinet._source.financial_fetch_progress"
 XBRL_FACTS_TABLE = "edinet._source.xbrl_facts"
 XBRL_CONTEXTS_TABLE = "edinet._source.xbrl_contexts"
 XBRL_LABELS_TABLE = "edinet._source.xbrl_labels"
+XBRL_NAMESPACES_TABLE = "edinet._source.xbrl_namespaces"
 TAXONOMY_LABELS_TABLE = "edinet._source.taxonomy_labels"
 XBRL_PROGRESS_TABLE = "edinet._source.xbrl_fetch_progress"
 AFFILIATES_TABLE = "edinet._source.affiliated_entities"
@@ -154,7 +155,10 @@ _XBRL_CONTEXTS_ARROW_SCHEMA = pa.schema(
 
 _LABEL_FIELDS = [("element_id", pa.string()), ("role", pa.string()), ("lang", pa.string()), ("label", pa.string())]
 _XBRL_LABELS_ARROW_SCHEMA = pa.schema([("doc_id", pa.string()), *_LABEL_FIELDS])
-_TAXONOMY_LABELS_ARROW_SCHEMA = pa.schema([("release", pa.string()), *_LABEL_FIELDS])
+_TAXONOMY_LABELS_ARROW_SCHEMA = pa.schema([("release", pa.string()), ("namespace", pa.string()), *_LABEL_FIELDS])
+_XBRL_NAMESPACES_ARROW_SCHEMA = pa.schema(
+    [("doc_id", pa.string()), ("prefix", pa.string()), ("uri", pa.string())]
+)
 
 _AFFILIATES_ARROW_SCHEMA = pa.schema(
     [("doc_id", pa.string()), ("context_id", pa.string()), ("row_seq", pa.int32())]
@@ -411,8 +415,8 @@ def _read_xbrl(doc_id: str, raw: bytes | None, now: datetime) -> dict[str, list[
     """type=1 の ZIP を、値・context・会社のラベル・関係会社の行に分ける。"""
     instance = xbrl.instance_from_zip(raw) if raw else None
     if instance is None:
-        return {"facts": [], "contexts": [], "labels": [], "affiliates": []}
-    contexts, facts = parse_instance(instance)
+        return {"facts": [], "contexts": [], "labels": [], "namespaces": [], "affiliates": []}
+    namespaces, contexts, facts = parse_instance(instance)
     fact_rows = [
         {
             "doc_id": doc_id,
@@ -446,6 +450,7 @@ def _read_xbrl(doc_id: str, raw: bytes | None, now: datetime) -> dict[str, list[
             for lab in xbrl.label_files_from_zip(raw)
             for e, r, lang, text in parse_labels(lab)
         ],
+        "namespaces": [{"doc_id": doc_id, "prefix": p, "uri": u} for p, u in namespaces.items()],
         "affiliates": _affiliate_rows(doc_id, fact_rows),
     }
 
@@ -454,6 +459,7 @@ _XBRL_TABLES = (
     ("facts", XBRL_FACTS_TABLE, _XBRL_FACTS_ARROW_SCHEMA),
     ("contexts", XBRL_CONTEXTS_TABLE, _XBRL_CONTEXTS_ARROW_SCHEMA),
     ("labels", XBRL_LABELS_TABLE, _XBRL_LABELS_ARROW_SCHEMA),
+    ("namespaces", XBRL_NAMESPACES_TABLE, _XBRL_NAMESPACES_ARROW_SCHEMA),
     ("affiliates", AFFILIATES_TABLE, _AFFILIATES_ARROW_SCHEMA),
     ("progress", XBRL_PROGRESS_TABLE, _FINANCIAL_PROGRESS_ARROW_SCHEMA),
 )
@@ -544,8 +550,8 @@ def ingest_taxonomy(conn: duckdb.DuckDBPyConnection) -> None:
         return
     for release, url in releases:
         rows = [
-            {"release": release, "element_id": e, "role": r, "lang": lang, "label": text}
-            for e, r, lang, text in taxonomy.release_labels(taxonomy.fetch(url))
+            {"release": release, "namespace": ns, "element_id": e, "role": r, "lang": lang, "label": text}
+            for ns, e, r, lang, text in taxonomy.release_labels(taxonomy.fetch(url))
         ]
         conn.execute("BEGIN")
         conn.register("_batch", pa.Table.from_pylist(rows, schema=_TAXONOMY_LABELS_ARROW_SCHEMA))
@@ -734,7 +740,8 @@ def _ensure_xbrl_tables(conn: duckdb.DuckDBPyConnection) -> None:
     )
     labels = "element_id VARCHAR, role VARCHAR, lang VARCHAR, label VARCHAR"
     conn.execute(f"CREATE TABLE IF NOT EXISTS {XBRL_LABELS_TABLE} (doc_id VARCHAR, {labels})")
-    conn.execute(f"CREATE TABLE IF NOT EXISTS {TAXONOMY_LABELS_TABLE} (release VARCHAR, {labels})")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {TAXONOMY_LABELS_TABLE} (release VARCHAR, namespace VARCHAR, {labels})")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {XBRL_NAMESPACES_TABLE} (doc_id VARCHAR, prefix VARCHAR, uri VARCHAR)")
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {XBRL_PROGRESS_TABLE} "
         "(doc_id VARCHAR, fetched_at TIMESTAMP, row_count INTEGER, status VARCHAR)"

@@ -53,8 +53,8 @@ def _context(el: ET.Element) -> Context:
     return Context(_text(el, p + "startDate"), _text(el, p + "endDate"), _text(el, p + "instant"), members)
 
 
-def parse_instance(instance: bytes) -> tuple[dict[str, Context], list[Fact]]:
-    """インスタンスから (context ID → Context, 値の並び) を返す。値は文書順。"""
+def parse_instance(instance: bytes) -> tuple[dict[str, str], dict[str, Context], list[Fact]]:
+    """インスタンスから (接頭辞 → 名前空間, context ID → Context, 値の並び) を返す。値は文書順。"""
     prefixes: dict[str, str] = {}
     contexts: dict[str, Context] = {}
     facts: list[Fact] = []
@@ -85,7 +85,7 @@ def parse_instance(instance: bytes) -> tuple[dict[str, Context], list[Fact]]:
                 )
             )
         item.clear()
-    return contexts, facts
+    return {prefix: uri for uri, prefix in prefixes.items()}, contexts, facts
 
 
 XLINK = "http://www.w3.org/1999/xlink"
