@@ -1,0 +1,27 @@
+schema: main
+name: raw_affiliated_entities
+description: 有価証券報告書の XBRL（書類取得 API type=1）の「関係会社の状況」の表を、1 社 1 行に分けたもの。値は記載のまま VARCHAR で保持し、型付けは mart で行う
+published: false
+fields:
+  - name: doc_id
+    description: 書類管理番号（documents と結合）
+  - name: context_id
+    description: テキストブロックのコンテキストID（通常 FilingDateInstant）
+  - name: row_seq
+    description: 書類内の並び順（0 始まり）
+  - name: category
+    description: 区分（連結子会社・持分法適用関連会社・親会社・その他の関係会社など）。見出しの記載のまま
+  - name: name
+    description: 名称の列の値。（注）や ※ の注記番号が付いたまま
+  - name: address
+    description: 住所の列の値
+  - name: capital
+    description: 資本金又は出資金の列の値。単位が付いていることがある
+  - name: capital_header
+    description: 資本金の列の見出し。セルに単位が無いときの単位の手がかり
+  - name: business
+    description: 主要な事業の内容の列の値
+  - name: voting_rights
+    description: 議決権の所有割合（又は被所有割合）の列の値。括弧内は間接所有の内数
+  - name: relationship
+    description: 関係内容の列の値。見出しが 2 段のときは「役員の兼任等: 有 / 営業上の取引等: …」とつなぐ

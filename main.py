@@ -26,6 +26,7 @@ from dbt.cli.main import dbtRunner
 
 from queria import Secret
 
+from edinet import affiliates, xbrl
 from edinet.client import EdinetClient
 from edinet.codelist import (
     COMPANY_FIELDS,
@@ -44,6 +45,9 @@ COMPANIES_TABLE = "edinet._source.companies"
 FUNDS_TABLE = "edinet._source.funds"
 FINANCIAL_FACTS_TABLE = "edinet._source.financial_facts"
 FINANCIAL_PROGRESS_TABLE = "edinet._source.financial_fetch_progress"
+TEXTBLOCKS_TABLE = "edinet._source.textblocks"
+XBRL_PROGRESS_TABLE = "edinet._source.xbrl_fetch_progress"
+AFFILIATES_TABLE = "edinet._source.affiliated_entities"
 
 # 書類取得 API type=5 CSV の列順（要素ID〜値の固定 9 列）に対応する英語キー。
 # _source には全 VARCHAR で保持し、型付け・リネームは stg 層で行う。
@@ -124,6 +128,21 @@ _FINANCIAL_PROGRESS_ARROW_SCHEMA = pa.schema(
     ]
 )
 
+_TEXTBLOCKS_ARROW_SCHEMA = pa.schema(
+    [
+        ("doc_id", pa.string()),
+        ("element_id", pa.string()),
+        ("context_id", pa.string()),
+        ("html", pa.string()),
+        ("_fetched_at", pa.timestamp("us")),
+    ]
+)
+
+_AFFILIATES_ARROW_SCHEMA = pa.schema(
+    [("doc_id", pa.string()), ("context_id", pa.string()), ("row_seq", pa.int32())]
+    + [(f, pa.string()) for f in affiliates.FIELDS if f != "row_seq"]
+)
+
 # 閲覧可能期間は書類種別ごとに最長 10 年（縦覧 + 延長）。これより古い日付は
 # 原則 0 件で返るため、既定の遡及開始日は約 10 年前に置く。環境変数で上書き可。
 DEFAULT_BACKFILL_START = "2016-01-01"
@@ -142,6 +161,10 @@ DEFAULT_MAX_DATES_PER_RUN = 1000
 DEFAULT_FINANCIAL_DOC_TYPES = "120,160"
 # 1 回の実行で財務 CSV を取得する書類数の上限（type=5 は documents より重い）。
 DEFAULT_MAX_DOCS_PER_RUN = 1000
+# XBRL 本体 (type=1) からテキストブロックを取る書類種別と 1 回の上限。ZIP は 1 件
+# 0.6〜3MB で CSV より重いので、財務 CSV より少なくする（4 秒間隔で 300 件 = 20 分）
+DEFAULT_XBRL_DOC_TYPES = "120"
+DEFAULT_MAX_XBRL_DOCS_PER_RUN = 300
 # 何書類分をまとめて 1 トランザクションでコミットするか。1 書類ごとの COMMIT を
 # 避け DuckLake のスナップショット/Parquet ファイル数を抑える。
 FINANCIAL_BATCH_SIZE = 50
@@ -209,6 +232,7 @@ def main() -> None:
     with _ducklake_connect() as (conn, secret):
         conn.execute("CREATE SCHEMA IF NOT EXISTS edinet._source")
         _ensure_tables(conn)
+        _ensure_xbrl_tables(conn)
         targets = _dates_to_fetch(conn, start, end)
         logger.info("fetch %d dates (%s 〜 %s)", len(targets), start, end)
         ingest_documents(conn, client, targets)
@@ -217,6 +241,11 @@ def main() -> None:
         doc_ids = _docs_to_fetch(conn, secret)
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
         ingest_financial_facts(conn, client, doc_ids, secret)
+        xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret)
+        logger.info("fetch XBRL text blocks for %d docs", len(xbrl_doc_ids))
+        ingest_textblocks(conn, client, xbrl_doc_ids, secret)
+        if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
+            reparse_affiliates(conn)
 
     dbt = dbtRunner()
     for cmd in (
@@ -344,8 +373,142 @@ def ingest_financial_facts(
     flush()
 
 
-def _fetched_doc_ids(
+def _affiliate_rows(doc_id: str, blocks: list[tuple[str, str, str]]) -> list[dict]:
+    """テキストブロックのうち関係会社の状況を 1 社 1 行に分ける。"""
+    return [
+        {"doc_id": doc_id, "context_id": context_id, **row}
+        for element_id, context_id, html in blocks
+        if element_id == "jpcrp_cor:OverviewOfAffiliatedEntitiesTextBlock"
+        for row in affiliates.parse_affiliated_entities(html)
+    ]
+
+
+def ingest_textblocks(
+    conn: duckdb.DuckDBPyConnection,
+    client: EdinetClient,
+    doc_ids: list[str],
+    secret: Secret | None = None,
+) -> None:
+    """XBRL 本体 (type=1) から関係会社などのテキストブロックを取り、関係会社を表に分ける。
+
+    HTML も残すので、読み方を直したときは取り直さずに ``reparse_affiliates`` で作り直せる。
+    バッチの扱いは ``ingest_financial_facts`` と同じ。
+    """
+    total = len(doc_ids)
+    blocks: list[dict] = []
+    rows: list[dict] = []
+    progress: list[dict] = []
+    docs: list[str] = []
+
+    def flush() -> None:
+        if not docs:
+            return
+        ph = ", ".join("?" for _ in docs)
+        conn.execute("BEGIN")
+        for table in (TEXTBLOCKS_TABLE, AFFILIATES_TABLE, XBRL_PROGRESS_TABLE):
+            conn.execute(f"DELETE FROM {table} WHERE doc_id IN ({ph})", docs)
+        for table, data, schema in (
+            (TEXTBLOCKS_TABLE, blocks, _TEXTBLOCKS_ARROW_SCHEMA),
+            (AFFILIATES_TABLE, rows, _AFFILIATES_ARROW_SCHEMA),
+            (XBRL_PROGRESS_TABLE, progress, _FINANCIAL_PROGRESS_ARROW_SCHEMA),
+        ):
+            if data:
+                conn.register("_batch", pa.Table.from_pylist(data, schema=schema))
+                conn.execute(f"INSERT INTO {table} SELECT * FROM _batch")
+                conn.unregister("_batch")
+        conn.execute("COMMIT")
+        for buf in (blocks, rows, progress, docs):
+            buf.clear()
+
+    for i, doc_id in enumerate(doc_ids, 1):
+        if secret is not None:
+            secret.refresh_if_due()
+        raw = client.get_document_xbrl(doc_id)
+        instance = xbrl.instance_from_zip(raw) if raw else None
+        found = xbrl.extract_textblocks(instance) if instance else []
+        now = datetime.now()
+        blocks.extend(
+            {"doc_id": doc_id, "element_id": e, "context_id": c, "html": h, "_fetched_at": now}
+            for e, c, h in found
+        )
+        rows.extend(_affiliate_rows(doc_id, found))
+        progress.append(
+            {
+                "doc_id": doc_id,
+                "fetched_at": now,
+                "row_count": len(found),
+                "status": "done" if found else "empty",
+            }
+        )
+        docs.append(doc_id)
+        if len(docs) >= FINANCIAL_BATCH_SIZE:
+            flush()
+            logger.info("  %d/%d docs (XBRL text blocks)", i, total)
+    flush()
+
+
+def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
+    """保存済みの HTML から関係会社の表を全件作り直す（読み方を直したとき用）。"""
+    found = conn.execute(
+        f"SELECT doc_id, element_id, context_id, html FROM {TEXTBLOCKS_TABLE} "
+        "WHERE element_id = 'jpcrp_cor:OverviewOfAffiliatedEntitiesTextBlock'"
+    ).fetchall()
+    rows = [
+        row
+        for doc_id, element_id, context_id, html in found
+        for row in _affiliate_rows(doc_id, [(element_id, context_id, html)])
+    ]
+    conn.execute("BEGIN")
+    conn.execute(f"DELETE FROM {AFFILIATES_TABLE}")
+    if rows:
+        conn.register("_batch", pa.Table.from_pylist(rows, schema=_AFFILIATES_ARROW_SCHEMA))
+        conn.execute(f"INSERT INTO {AFFILIATES_TABLE} SELECT * FROM _batch")
+        conn.unregister("_batch")
+    conn.execute("COMMIT")
+    logger.info("reparsed affiliated entities: %d rows from %d docs", len(rows), len(found))
+
+
+def _xbrl_docs_to_fetch(
     conn: duckdb.DuckDBPyConnection, secret: Secret | None = None
+) -> list[str]:
+    """XBRL のテキストブロックを未取得の書類を、提出日時の新しい順に返す（上限あり）。"""
+    doc_types = [
+        t.strip()
+        for t in os.environ.get("EDINET_XBRL_DOC_TYPES", DEFAULT_XBRL_DOC_TYPES).split(",")
+        if t.strip()
+    ]
+    if not doc_types:
+        return []
+    cap = int(
+        os.environ.get("EDINET_MAX_XBRL_DOCS_PER_RUN", str(DEFAULT_MAX_XBRL_DOCS_PER_RUN))
+    )
+    ph = ", ".join("?" for _ in doc_types)
+    conn.register("_fetched", _fetched_doc_ids(conn, secret, "xbrl_fetch_progress"))
+    if secret is not None:
+        secret.refresh_if_due()
+    rows = conn.execute(
+        f"""
+        SELECT d."docID"
+        FROM {DOCUMENTS_TABLE} AS d
+        LEFT JOIN _fetched AS p ON d."docID" = p.doc_id
+        WHERE d."docTypeCode" IN ({ph})
+          AND d."xbrlFlag" = '1'
+          AND d."withdrawalStatus" = '0'
+          AND p.doc_id IS NULL
+        GROUP BY d."docID"
+        ORDER BY max(d."submitDateTime") DESC
+        LIMIT {cap}
+        """,
+        doc_types,
+    ).fetchall()
+    conn.unregister("_fetched")
+    return [r[0] for r in rows]
+
+
+def _fetched_doc_ids(
+    conn: duckdb.DuckDBPyConnection,
+    secret: Secret | None = None,
+    table: str = "financial_fetch_progress",
 ) -> pa.Table:
     """進捗表に登録済みの doc_id を、データファイルを束ごとに読んで返す。
 
@@ -361,10 +524,10 @@ def _fetched_doc_ids(
         r[0]
         for r in conn.execute(
             "SELECT data_file FROM ducklake_list_files("
-            "'edinet', 'financial_fetch_progress', schema => '_source')"
+            f"'edinet', '{table}', schema => '_source')"
         ).fetchall()
     ]
-    logger.info("financial_fetch_progress: %d files", len(files))
+    logger.info("%s: %d files", table, len(files))
     seen: set[str] = set()
     for start in range(0, len(files), PROGRESS_READ_BATCH_FILES):
         if secret is not None:
@@ -468,6 +631,23 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {FINANCIAL_PROGRESS_TABLE} "
         "(doc_id VARCHAR, fetched_at TIMESTAMP, row_count INTEGER, status VARCHAR)"
+    )
+
+
+def _ensure_xbrl_tables(conn: duckdb.DuckDBPyConnection) -> None:
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS {TEXTBLOCKS_TABLE} "
+        "(doc_id VARCHAR, element_id VARCHAR, context_id VARCHAR, html VARCHAR, "
+        "_fetched_at TIMESTAMP)"
+    )
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS {XBRL_PROGRESS_TABLE} "
+        "(doc_id VARCHAR, fetched_at TIMESTAMP, row_count INTEGER, status VARCHAR)"
+    )
+    cols = ", ".join(f"{f} VARCHAR" for f in affiliates.FIELDS if f != "row_seq")
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS {AFFILIATES_TABLE} "
+        f"(doc_id VARCHAR, context_id VARCHAR, row_seq INTEGER, {cols})"
     )
 
 

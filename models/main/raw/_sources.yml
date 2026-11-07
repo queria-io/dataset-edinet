@@ -13,3 +13,7 @@ sources:
         description: ファンドコードリスト（FundcodeDlInfo.csv）のファンドマスタ
       - name: financial_facts
         description: 書類取得 API (type=5 CSV) の財務データ本体（要素ID×コンテキストの縦持ちファクト）
+      - name: textblocks
+        description: 書類取得 API (type=1) の XBRL インスタンスから取り出したテキストブロック（関係会社の状況など）の HTML
+      - name: affiliated_entities
+        description: textblocks の関係会社の状況を 1 社 1 行に分けたもの（値は記載のまま）
