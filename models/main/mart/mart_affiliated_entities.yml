@@ -16,6 +16,7 @@ models:
       - name: submit_date
       - name: row_seq
       - name: category
+      - name: category_group
       - name: name
         data_tests: [not_null]
       - name: note_refs
@@ -28,4 +29,5 @@ models:
       - name: voting_rights_text
       - name: voting_rights_ratio
       - name: voting_rights_indirect_ratio
+      - name: voting_rights_held_by_affiliate
       - name: relationship

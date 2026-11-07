@@ -161,7 +161,7 @@ DEFAULT_MAX_DATES_PER_RUN = 1000
 DEFAULT_FINANCIAL_DOC_TYPES = "120,160"
 # 1 回の実行で財務 CSV を取得する書類数の上限（type=5 は documents より重い）。
 DEFAULT_MAX_DOCS_PER_RUN = 1000
-# XBRL 本体 (type=1) からテキストブロックを取る書類種別と 1 回の上限。ZIP は 1 件
+# XBRL 本体 (type=1) からテキストブロックを取る書類種別（開示府令の様式のものだけ）と 1 回の上限。ZIP は 1 件
 # 0.6〜3MB で CSV より重いので、財務 CSV より少なくする（4 秒間隔で 300 件 = 20 分）
 DEFAULT_XBRL_DOC_TYPES = "120"
 DEFAULT_MAX_XBRL_DOCS_PER_RUN = 300
@@ -494,6 +494,9 @@ def _xbrl_docs_to_fetch(
         WHERE d."docTypeCode" IN ({ph})
           AND d."xbrlFlag" = '1'
           AND d."withdrawalStatus" = '0'
+          -- 企業内容等の開示に関する内閣府令の様式だけ。投資信託・投資法人など
+          -- 特定有価証券の様式（030）には関係会社の状況などの要素が無い
+          AND d."ordinanceCode" = '010'
           AND p.doc_id IS NULL
         GROUP BY d."docID"
         ORDER BY max(d."submitDateTime") DESC

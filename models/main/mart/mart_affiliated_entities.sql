@@ -13,7 +13,18 @@ src as (
         a.*,
         -- 全角の数字・記号を半角にしてから読む
         translate(a.capital, '０１２３４５６７８９，．', '0123456789,.') as capital_ascii,
-        translate(a.voting_rights, '０１２３４５６７８９．（）', '0123456789.()') as voting_ascii
+        -- 2 段の見出しの「所有割合（％）: 62.5 / 被所有割合（％）: －」は見出しを外す
+        regexp_replace(
+            translate(a.voting_rights, '０１２３４５６７８９．（）', '0123456789.()'),
+            '[^/:]*:\s*', '', 'g'
+        ) as voting_ascii,
+        case
+            when a.category like '親会社%' then '親会社'
+            when a.category like 'その他の関係会社%' then 'その他の関係会社'
+            when a.category like '持分法適用%' or a.category like '関連会社%' then '持分法適用会社・関連会社'
+            when a.category like '非連結子会社%' then '非連結子会社'
+            when a.category like '連結子会社%' then '連結子会社'
+        end as category_group
     from {{ ref('raw_affiliated_entities') }} as a
 ),
 
@@ -21,7 +32,7 @@ parsed as (
     select
         *,
         -- 名称の末尾の「（注）３」「（注）２、４」「※１」を外す
-        trim(regexp_replace(name, '\s*(（注[）)]|\(注\)|※)\s*[0-9０-９,、，・\s]*', '', 'g')) as name_clean,
+        trim(regexp_replace(name, '\s*(（注[）)]|\(注\)|※)\s*[0-9０-９,、，・.．\s]*', '', 'g')) as name_clean,
         nullif(array_to_string(regexp_extract_all(name, '(?:（注[）)]|\(注\)|※)\s*([0-9０-９,、，・\s]+)', 1), ','), '') as note_refs,
         try_cast(replace(regexp_extract(capital_ascii, '[0-9][0-9,]*(\.[0-9]+)?'), ',', '') as decimal(24, 4)) as capital_amount,
         -- 単位はセルの数字以外の文字。無ければ見出しの括弧書き（「資本金（百万円）」）
@@ -29,7 +40,7 @@ parsed as (
             nullif(trim(regexp_replace(capital_ascii, '[0-9,.\s]|（注[）)]?|\(注\)|※', '', 'g')), ''),
             nullif(regexp_extract(capital_header, '[（(]([^）)]+)[）)]', 1), '')
         ) as capital_unit,
-        try_cast(regexp_extract(voting_ascii, '^\s*([0-9]+(\.[0-9]+)?)', 1) as decimal(7, 2)) as voting_pct,
+        try_cast(regexp_extract(voting_ascii, '([0-9]+(\.[0-9]+)?)', 1) as decimal(7, 2)) as voting_pct,
         try_cast(regexp_extract(voting_ascii, '\(\s*([0-9]+(\.[0-9]+)?)\s*\)', 1) as decimal(7, 2)) as voting_indirect_pct
     from src
 )
@@ -45,6 +56,7 @@ select
     d.submit_date,
     p.row_seq,
     p.category,
+    p.category_group,
     p.name_clean as name,
     p.note_refs,
     p.address,
@@ -60,9 +72,13 @@ select
     end::bigint as capital_yen,
     p.business,
     p.voting_rights as voting_rights_text,
-    -- 0〜1 の比率。被所有（親会社・その他の関係会社）の行は、提出会社が所有される割合
+    -- 0〜1 の比率。voting_rights_held_by_affiliate の行は、提出会社が所有される割合
     p.voting_pct / 100 as voting_rights_ratio,
     p.voting_indirect_pct / 100 as voting_rights_indirect_ratio,
+    -- 割合が「被所有」（相手が提出会社の議決権を持つ）か。親会社・その他の関係会社の行と、
+    -- 値が「被所有」で始まる行
+    coalesce(p.category_group in ('親会社', 'その他の関係会社'), false)
+        or trim(p.voting_ascii) like '被所有%' as voting_rights_held_by_affiliate,
     p.relationship
 from parsed as p
 left join docs as d on p.doc_id = d.doc_id

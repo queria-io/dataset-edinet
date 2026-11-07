@@ -70,3 +70,66 @@ def test_category_of():
     assert category_of("(1）連結子会社") == "連結子会社"
     assert category_of("(3) その他の関係会社") == "その他の関係会社"
     assert category_of("㈱エー") is None
+
+
+def _names(html):
+    return [(r["category"], r["name"]) for r in parse_affiliated_entities(html)]
+
+
+ROW = "<tr><td>{}</td><td>{}</td><td>{}</td><td>事業</td><td>{}</td><td>{}</td></tr>"
+CAT = "<tr><td>{}</td><td></td><td></td><td></td><td>{}</td><td></td></tr>"
+HEAD = "<tr><td>名称</td><td>住所</td><td>資本金</td><td>主要な事業の内容</td><td>議決権の所有割合</td><td>関係内容</td></tr>"
+
+
+def test_category_in_header_cell_and_two_level_voting():
+    html = """<table>
+    <tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td rowspan="2">名称 （連結子会社）</td><td rowspan="2">住所</td><td rowspan="2">資本金又は出資金 （百万円）</td><td rowspan="2">主要な事業の内容</td><td colspan="2">議決権の所有（被所有）割合</td><td rowspan="2">関係内容</td></tr>
+    <tr><td>所有割合 （％）</td><td>被所有割合（％）</td></tr>
+    <tr><td>㈱ワイ</td><td>東京都港区</td><td>20</td><td>物流事業</td><td>62.5</td><td>－</td><td>委託</td></tr>
+    </table>"""
+    rows = parse_affiliated_entities(html)
+    assert _names(html) == [("連結子会社", "㈱ワイ")]
+    assert rows[0]["voting_rights"] == "所有割合 （％）: 62.5 / 被所有割合（％）: －"
+
+
+def test_category_prefix_in_name_cell():
+    html = "<table>" + HEAD + ROW.format("(連結子会社)㈱A", "川崎市", "20百万円", "60.0", "－") + ROW.format("㈱B", "香港", "1,360百万円", "100.0", "－") + ROW.format("（持分法適用関連会社） ㈱C", "東京都", "10", "30", "－") + "</table>"
+    assert _names(html) == [("連結子会社", "㈱A"), ("連結子会社", "㈱B"), ("持分法適用関連会社", "㈱C")]
+
+
+def test_category_sentence_and_owned_by_marker_row():
+    html = "<p>親会社は、次のとおりであります。</p><table>" + HEAD + ROW.format("㈱P", "東京都", "100", "被所有 51.0", "－") + "</table>"
+    assert _names(html) == [("親会社", "㈱P")]
+    html = "<table>" + HEAD + CAT.format("(親会社)", "（被所有）") + ROW.format("㈱P※１、２", "東京都", "11,707", "41.0(6.8)", "－") + CAT.format("(その他の関係会社の子会社)", "") + ROW.format("㈱Q", "大阪", "5", "－", "－") + "</table>"
+    assert _names(html) == [("親会社", "㈱P※１、２"), ("その他の関係会社の子会社", "㈱Q")]
+
+
+def test_drops_other_counts_and_summary_tables():
+    html = "<p>（連結子会社）</p><table>" + HEAD + ROW.format("㈱A", "東京都", "10", "100", "－") + CAT.format("その他17社", "") + CAT.format("計", "") + "</table>"
+    html += "<table><tr><td>名称</td><td>売上高</td><td>経常利益</td><td>当期純利益</td><td>純資産額</td><td>総資産額</td></tr><tr><td>㈱A</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td></tr></table>"
+    assert _names(html) == [("連結子会社", "㈱A")]
+
+
+def test_rowspan_name_is_one_company():
+    html = "<p>（連結子会社）</p><table>" + HEAD + """
+    <tr><td rowspan="2">㈱A</td><td rowspan="2">香港</td><td rowspan="2">1,360百万円</td><td rowspan="2">投資</td><td rowspan="2">100.0</td><td>資金の貸付</td></tr>
+    <tr><td>役員の兼任１名</td></tr></table>"""
+    rows = parse_affiliated_entities(html)
+    assert _names(html) == [("連結子会社", "㈱A")]
+    assert rows[0]["relationship"] == "資金の貸付 役員の兼任１名"
+
+
+def test_companies_stacked_in_one_cell():
+    html = "<table>" + HEAD + """
+    <tr><td><p>(連結子会社)</p><p>㈱S</p><p>S U.S.A., Inc.</p></td><td><p>東京都中央区</p><p>米国デンバー市</p></td>
+    <td><p>100</p><p>10,125 (US$)</p></td><td>事業</td><td><p>100</p><p>100 (100)</p></td><td>－</td></tr></table>"""
+    rows = parse_affiliated_entities(html)
+    assert _names(html) == [("連結子会社", "㈱S"), ("連結子会社", "S U.S.A., Inc.")]
+    assert rows[1]["address"] == "米国デンバー市"
+    assert rows[1]["capital"] == "10,125 (US$)"
+
+
+def test_unit_only_row_applies_to_next_company():
+    html = "<p>（連結子会社）</p><table>" + HEAD + "<tr><td></td><td></td><td>千HK$</td><td></td><td></td><td></td></tr>" + ROW.format("A Ltd.", "香港", "30,700", "100", "－") + "</table>"
+    assert parse_affiliated_entities(html)[0]["capital"] == "千HK$ 30,700"
