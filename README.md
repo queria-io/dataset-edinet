@@ -9,6 +9,7 @@
 | 書類一覧 API（documents.json、Version 2） | `main.mart_documents` |
 | EDINETコードリスト（EdinetcodeDlInfo.csv） | `main.mart_companies` |
 | ファンドコードリスト（FundcodeDlInfo.csv） | `main.mart_funds` |
+| 書類取得 API（type=1 の XBRL） | `main.mart_affiliated_entities` |
 | 書類取得 API（type=5 の CSV。XBRL を構造化したもの） | `main.stg_financial_facts`・`main.mart_business_results`・`main.mart_human_capital` |
 
 - [EDINET の利用規約](https://disclosure2.edinet-fsa.go.jp/)に従います
@@ -24,6 +25,7 @@
 | `main.stg_financial_facts` | 1 行が 1 要素・1 コンテキスト。有価証券報告書・半期報告書の財務データの本体 |
 | `main.mart_business_results` | 1 行が 1 書類・1 会計年度。有報の主要経営指標を会計基準をまたいで統一したもの |
 | `main.mart_human_capital` | 1 行が 1 書類。有報の従業員の状況・女性活躍と育児休業の指標・女性役員 |
+| `main.mart_affiliated_entities` | 1 行が 1 書類・1 関係会社。有報の関係会社の状況（親会社・連結子会社・持分法適用関連会社などの名称・住所・資本金・事業・議決権の所有割合・関係内容） |
 
 テーブルの結合:
 
@@ -83,6 +85,23 @@ GROUP BY c.industry
 ORDER BY median_salary DESC;
 ```
 
+ある会社の最新の有報に載っている連結子会社を、議決権の所有割合の高い順に並べる:
+
+```sql
+WITH latest AS (
+  SELECT doc_id
+  FROM edinet.main.mart_documents
+  WHERE sec_code = '72030' AND doc_type_code = '120' AND NOT is_withdrawn
+  ORDER BY submit_date DESC
+  LIMIT 1
+)
+SELECT name, address, capital_amount, capital_unit, business, voting_rights_ratio
+FROM edinet.main.mart_affiliated_entities
+JOIN latest USING (doc_id)
+WHERE category_group = '連結子会社'
+ORDER BY voting_rights_ratio DESC;
+```
+
 ## 収録範囲の注意
 
 - 財務データは有価証券報告書と半期報告書が対象です（`stg_financial_facts` の `doc_type_code` が 120 / 160）。`mart_business_results` と `mart_human_capital` は有価証券報告書だけから作っています。四半期報告書（2024 年 3 月で廃止）は対象外です
@@ -97,6 +116,7 @@ ORDER BY median_salary DESC;
 - `context_id` は期間・連結区分・セグメントを表します。個別は `_NonConsolidatedMember` が付き、年度は `CurrentYear`・`PriorNYear` で分かれます
 - 半期報告書の値は中間期のものですが、`period_end` は中間期末ではなく事業年度末です。年度の値と混ぜないでください
 - `mart_business_results` は、連結の値があれば連結、無ければ個別の値です。IFRS 採用企業の値（RevenueIFRS など）は JP GAAP の列に統合しています。1 書類あたり当期から四期前までの最大 5 会計年度分の行があるので、同じ会計年度が複数の書類に出てきます。各年の有報の当期の値だけを使うときは `year_offset = 0` で絞ってください
+- `mart_affiliated_entities` は XBRL 本体（type=1）の「関係会社の状況」の表を列の見出しで読んで作っています。有報に載っている関係会社だけで、大きな会社は主要な関係会社だけを載せています（「上記以外の連結子会社数は 208 社」など）。名称に法人番号は付いていません。開示府令の様式の有報だけが対象で、投資信託・投資法人の有報は含みません。過去の書類は新しい提出日から順に取り込んでいる途中です
 - 1 株当たり純資産は、IFRS 採用企業では 1 株当たり親会社所有者帰属持分です。外貨建て（USD）で開示された値は含みません。自己資本比率は 0〜1 の比率で、債務超過なら負の値です
 
 ## 従業員・女性活躍の指標の注意

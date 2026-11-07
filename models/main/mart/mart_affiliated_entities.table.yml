@@ -1,0 +1,81 @@
+schema: main
+name: mart_affiliated_entities
+title: EDINET 関係会社の状況
+description: |-
+  有価証券報告書の「関係会社の状況」の表を、1 社 1 行にまとめたものです。親会社・連結子会社・持分法適用関連会社・その他の関係会社の名称・住所・資本金・主要な事業の内容・議決権の所有割合・関係内容を持ちます。
+
+  - 有報に載っている会社だけです。大きな会社は主要な関係会社だけを載せていて、全子会社の一覧ではありません
+  - 名称は有報の記載のままで、法人番号は付いていません
+  - 値はその有報の提出日時点の記載です。推移は各年の有報の行を並べて確認してください
+published: true
+sources:
+  - path: https://disclosure2.edinet-fsa.go.jp/
+fields:
+  - name: doc_id
+    title: 書類管理番号
+    description: mart_documents と結合できる
+  - name: edinet_code
+    title: 提出者EDINETコード
+    description: 関係会社の情報を載せた会社（提出会社）の EDINET コード
+  - name: sec_code
+    title: 提出者証券コード
+  - name: corporate_number
+    title: 提出者法人番号
+    description: 提出会社の法人番号（13桁）。関係会社の法人番号ではない
+    semantic: { role: entity, name: corporate_number }
+  - name: filer_name
+    title: 提出者名
+  - name: period_end
+    title: 当期会計期間（至）
+  - name: fiscal_year
+    title: 会計年度
+    description: period_end の年
+  - name: submit_date
+    title: 提出日
+  - name: row_seq
+    title: 書類内の並び順
+    description: 0 始まり
+  - name: category
+    title: 区分（記載のまま）
+    description: 有報の見出しの区分名（連結子会社・持分法適用関連会社・持分法適用会社・その他の関係会社の子会社など）
+  - name: category_group
+    title: 区分
+    description: category を 親会社・連結子会社・非連結子会社・持分法適用会社・関連会社・その他の関係会社 にまとめたもの
+  - name: name
+    title: 関係会社の名称
+    description: 注記番号（「（注）３」「※１」）を外し、折り返しで入った和文どうしの間の空白を詰めたもの
+  - name: note_refs
+    title: 注記番号
+    description: 名称に付いていた注記番号（特定子会社などを示す）。注記の本文は含まない
+  - name: address
+    title: 住所
+    description: 記載のまま。国内は市区町村まで、海外は国名や都市名のことが多い。「〃」「同上」は直前の会社の値を写している
+  - name: capital_text
+    title: 資本金又は出資金（記載のまま）
+  - name: capital_amount
+    title: 資本金又は出資金の数値
+    description: capital_unit の単位での数値
+  - name: capital_unit
+    title: 資本金又は出資金の単位
+    description: セルに書かれた単位（「千米ドル」など）。無ければ列の見出しの単位（「資本金（百万円）」の百万円）
+  - name: capital_yen
+    title: 資本金又は出資金（円）
+    description: 単位が円・千円・百万円・億円のときだけ円に直した値。外貨は NULL
+  - name: business
+    title: 主要な事業の内容
+    description: セグメント名や事業の説明。「〃」は直前の会社の値を写している
+  - name: voting_rights_text
+    title: 議決権の所有割合（記載のまま）
+    description: 「100.0(30.0)」の括弧内は間接所有の内数、「[ ]」は緊密な者等の外数
+  - name: voting_rights_ratio
+    title: 議決権の所有割合
+    description: 0〜1 の比率。voting_rights_held_by_affiliate が true の行は、関係会社が提出会社の議決権を持つ割合（被所有割合）
+  - name: voting_rights_indirect_ratio
+    title: 議決権の所有割合のうち間接所有
+    description: 0〜1 の比率。「( )」内の内数
+  - name: voting_rights_held_by_affiliate
+    title: 被所有割合か
+    description: 親会社・その他の関係会社の行と、値が「被所有」で始まる行は true
+  - name: relationship
+    title: 関係内容
+    description: 役員の兼任・資金援助・営業上の取引など。見出しが 2 段の表は「役員の兼任等: 有 / 営業上の取引等: …」とつないでいる

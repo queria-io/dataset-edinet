@@ -8,6 +8,21 @@ with docs as (
     qualify row_number() over (partition by doc_id order by submit_datetime desc) = 1
 ),
 
+-- 「〃」「同上」は直前の会社と同じ値なので、書類の中で前の行の値を写す
+filled as (
+    select
+        * replace (
+            {% for col in ['address', 'capital', 'business', 'relationship'] -%}
+            coalesce(
+                case when trim({{ col }}) not in ('〃', '同上') then {{ col }} end,
+                last_value(case when trim({{ col }}) not in ('〃', '同上') then {{ col }} end ignore nulls)
+                    over (partition by doc_id order by row_seq rows between unbounded preceding and 1 preceding)
+            ) as {{ col }}{{ "," if not loop.last }}
+            {% endfor %}
+        )
+    from {{ ref('raw_affiliated_entities') }}
+),
+
 src as (
     select
         a.*,
@@ -25,14 +40,22 @@ src as (
             when a.category like '非連結子会社%' then '非連結子会社'
             when a.category like '連結子会社%' then '連結子会社'
         end as category_group
-    from {{ ref('raw_affiliated_entities') }} as a
+    from filled as a
 ),
 
 parsed as (
     select
         *,
-        -- 名称の末尾の「（注）３」「（注）２、４」「※１」を外す
-        trim(regexp_replace(name, '\s*(（注[）)]|\(注\)|※)\s*[0-9０-９,、，・.．\s]*', '', 'g')) as name_clean,
+        -- 名称の末尾の「（注）３」「（注）２、４」「※１」を外し、折り返しで入った和文どうしの間の
+        -- 空白を詰める（「株式会社 ツーアール」→「株式会社ツーアール」。英文の空白は残す）。
+        -- 重なる一致を拾えないので 2 回かける
+        regexp_replace(
+            regexp_replace(
+                trim(regexp_replace(name, '\s*(（注[）)]|\(注\)|※)\s*[0-9０-９,、，・.．\s]*', '', 'g')),
+                '([^\x00-\x7F])\s+([^\x00-\x7F])', '\1\2', 'g'
+            ),
+            '([^\x00-\x7F])\s+([^\x00-\x7F])', '\1\2', 'g'
+        ) as name_clean,
         nullif(array_to_string(regexp_extract_all(name, '(?:（注[）)]|\(注\)|※)\s*([0-9０-９,、，・\s]+)', 1), ','), '') as note_refs,
         try_cast(replace(regexp_extract(capital_ascii, '[0-9][0-9,]*(\.[0-9]+)?'), ',', '') as decimal(24, 4)) as capital_amount,
         -- 単位はセルの数字以外の文字。無ければ見出しの括弧書き（「資本金（百万円）」）

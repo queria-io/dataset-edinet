@@ -97,7 +97,11 @@ def _header(table: Table) -> tuple[int, dict[int, list[int]], dict[int, str], st
     while end + 1 < len(table) and table[end + 1][name_col].text == name_text:
         end += 1
     texts = {
-        c: "/".join(dict.fromkeys(table[r][c].text for r in range(start, end + 1) if table[r][c].text))
+        c: "/".join(
+            dict.fromkeys(
+                _squash(table[r][c].text.replace(SEP, "")) for r in range(start, end + 1) if table[r][c].text
+            )
+        )
         for c in range(len(table[start]))
     }
     if any(w in t for t in texts.values() for w in _SUMMARY_WORDS):

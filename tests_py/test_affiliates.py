@@ -90,7 +90,7 @@ def test_category_in_header_cell_and_two_level_voting():
     </table>"""
     rows = parse_affiliated_entities(html)
     assert _names(html) == [("連結子会社", "㈱ワイ")]
-    assert rows[0]["voting_rights"] == "所有割合 （％）: 62.5 / 被所有割合（％）: －"
+    assert rows[0]["voting_rights"] == "所有割合（％）: 62.5 / 被所有割合（％）: －"
 
 
 def test_category_prefix_in_name_cell():
