@@ -2,7 +2,8 @@
 
 表は rowspan・colspan を展開した長方形のセルの配列にする。結合されたセルは同じ文字列を
 各マスに置き、rowspan で上の行から写したマスには ``from_above`` の印を付ける。
-セルの中の段落 (p・div・br) の切れ目は改行で残す。
+セルの中の段落 (p・div・br) の切れ目は改行で残し、空の段落は ``SEP`` の行で残す
+（1 つのセルに複数の会社を空の段落で区切って並べる書き方がある）。
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
 _BLOCK_TAGS = {"p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "br"}
+SEP = "\ue000"  # 私用領域の文字。strip で消えない
 _SPACES = re.compile(r"[ \t\r\f\v　\xa0]+")
 
 
@@ -26,9 +28,14 @@ Block = tuple[str, str | Table]  # ("text", 段落) か ("table", 表)
 
 
 def normalize_text(s: str) -> str:
-    """空白をまとめ、空でない行を改行でつなぐ。"""
-    lines = (_SPACES.sub(" ", line).strip() for line in s.split("\n"))
-    return "\n".join(line for line in lines if line)
+    """空白をまとめ、空でない行を改行でつなぐ。区切り (SEP) は続くものを 1 つにし、両端から外す。"""
+    lines = [l for l in (_SPACES.sub(" ", line).strip() for line in s.split("\n")) if l]
+    merged = [l for i, l in enumerate(lines) if not (l == SEP and i and lines[i - 1] == SEP)]
+    while merged and merged[0] == SEP:
+        merged.pop(0)
+    while merged and merged[-1] == SEP:
+        merged.pop()
+    return "\n".join(merged)
 
 
 @dataclass
@@ -36,6 +43,7 @@ class _Table:
     rows: list[list[tuple[str, int, int]]] = field(default_factory=list)
     cell: list[str] | None = None
     span: tuple[int, int] = (1, 1)
+    opened: list[int] = field(default_factory=list)  # セルの中で開いた段落の開始位置
 
 
 class _Parser(HTMLParser):
@@ -67,7 +75,10 @@ class _Parser(HTMLParser):
             t.cell = []
             t.span = (_int(a.get("rowspan")), _int(a.get("colspan")))
         elif tag in _BLOCK_TAGS and self.tables[-1].cell is not None:
-            self.tables[-1].cell.append("\n")
+            t = self.tables[-1]
+            t.cell.append("\n")
+            if tag != "br":
+                t.opened.append(len(t.cell))
 
     def handle_endtag(self, tag: str) -> None:
         if not self.tables:
@@ -80,8 +91,11 @@ class _Parser(HTMLParser):
                 t.rows.append([])
             t.rows[-1].append((normalize_text("".join(t.cell)), *t.span))
             t.cell = None
+            t.opened = []
         elif tag in _BLOCK_TAGS and t.cell is not None:
-            t.cell.append("\n")
+            start = t.opened.pop() if t.opened else len(t.cell)
+            empty = not "".join(t.cell[start:]).strip()
+            t.cell.append(f"\n{SEP}\n" if empty else "\n")
         elif tag == "table":
             done = self.tables.pop()
             grid = _expand(done.rows)

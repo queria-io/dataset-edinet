@@ -122,8 +122,8 @@ def test_rowspan_name_is_one_company():
 
 def test_companies_stacked_in_one_cell():
     html = "<table>" + HEAD + """
-    <tr><td><p>(連結子会社)</p><p>㈱S</p><p>S U.S.A., Inc.</p></td><td><p>東京都中央区</p><p>米国デンバー市</p></td>
-    <td><p>100</p><p>10,125 (US$)</p></td><td>事業</td><td><p>100</p><p>100 (100)</p></td><td>－</td></tr></table>"""
+    <tr><td><p>(連結子会社)</p><p>㈱S</p><p></p><p>S U.S.A.,</p><p>Inc.</p></td><td><p>東京都中央区</p><p>&#160;</p><p>米国デンバー市</p></td>
+    <td><p>100</p><p></p><p>10,125 (US$)</p></td><td>事業</td><td><p>100</p><p></p><p>100 (100)</p></td><td>－</td></tr></table>"""
     rows = parse_affiliated_entities(html)
     assert _names(html) == [("連結子会社", "㈱S"), ("連結子会社", "S U.S.A., Inc.")]
     assert rows[1]["address"] == "米国デンバー市"
@@ -133,3 +133,18 @@ def test_companies_stacked_in_one_cell():
 def test_unit_only_row_applies_to_next_company():
     html = "<p>（連結子会社）</p><table>" + HEAD + "<tr><td></td><td></td><td>千HK$</td><td></td><td></td><td></td></tr>" + ROW.format("A Ltd.", "香港", "30,700", "100", "－") + "</table>"
     assert parse_affiliated_entities(html)[0]["capital"] == "千HK$ 30,700"
+
+
+def test_wrapped_lines_are_not_split():
+    html = "<p>（連結子会社）</p><table>" + HEAD + """
+    <tr><td><p>株式会社</p><p>ツーアール</p></td><td><p>沖縄県</p><p>浦添市</p></td><td>50</td><td>事業</td><td>100</td><td>－</td></tr>
+    <tr><td><p>㈱カゴシマバンズ</p><p></p><p>（注）３</p></td><td><p>鹿児島県</p><p></p><p>霧島市</p></td><td>10</td><td>事業</td><td>100</td><td>－</td></tr>
+    </table>"""
+    assert _names(html) == [("連結子会社", "株式会社 ツーアール"), ("連結子会社", "㈱カゴシマバンズ （注）３")]
+    assert parse_affiliated_entities(html)[0]["address"] == "沖縄県 浦添市"
+
+
+def test_category_row_spanning_all_columns():
+    html = "<p>（連結子会社）</p><table>" + HEAD + ROW.format("㈱A", "東京都", "10", "100", "－")
+    html += '<tr><td colspan="6">（持分法適用関連会社）</td></tr>' + ROW.format("㈱B", "大阪", "5", "30", "－") + "</table>"
+    assert _names(html) == [("連結子会社", "㈱A"), ("持分法適用関連会社", "㈱B")]

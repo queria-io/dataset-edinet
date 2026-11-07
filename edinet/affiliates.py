@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from edinet.html_table import Cell, Table, parse_blocks
+from edinet.html_table import SEP, Table, parse_blocks
 
 # 見出しの文字 → 列名。上から順に最初に当たったものを使う
 _COLUMNS = (
@@ -37,6 +37,12 @@ _CATEGORY_SENTENCE = re.compile(rf"^{_NUMBERING}({_CATEGORY_NAMES})は[、,]")
 _CATEGORY_PREFIX = re.compile(rf"^[（(]({_CATEGORY_NAMES})[)）]\s*")
 # 会社名ではない行（「その他17社」「計」）
 _NOT_COMPANY = re.compile(r"^(その他\s*[0-9０-９]*\s*社?|[0-9０-９]+\s*社|計|合計|小計)$")
+# 分けた結果がこれだけなら、折り返しや注記を分けてしまったとみなす
+_FRAGMENT = re.compile(
+    r"^((（注[）)]|\(注\)|※)[0-9０-９,、，・.．\s]*|株式会社|有限会社|有限公司|"
+    r"CO\.?,?\s*LTD\.?|INC\.?|LIMITED|[〔(（][0-9.．]+[〕)）])$",
+    re.IGNORECASE,
+)
 # 子会社の売上高などを並べた「主要な損益情報等」の表の見出し
 _SUMMARY_WORDS = ("売上高", "経常利益", "純資産額", "営業収益")
 
@@ -112,18 +118,25 @@ def _value(cells: list[str], cols: list[int], texts: dict[int, str]) -> str | No
     return " / ".join(f"{h}: {v}" for h, v in parts) or None
 
 
-def _split_lines(cells: list[str], name_col: int) -> list[list[str]]:
-    """1 つのセルに複数の会社が改行で並ぶ行を分ける。
+def _flat(text: str) -> str:
+    return " ".join(line for line in text.split("\n") if line and line != SEP)
 
-    名称の行数と同じ行数のセルだけを分け、ほかのセルは各行に写す。名称が 1 行なら
-    改行を空白に戻して 1 行のまま返す。
+
+def _split_lines(cells: list[str], name_col: int) -> list[list[str]]:
+    """1 つのセルに空の段落で区切って複数の会社を並べた行を分ける。
+
+    名称の区切りの数と同じ数に区切られたセルだけを分け、ほかのセルは各行に写す。
+    区切りの無い改行（折り返し）では分けない。分けた名称が「株式会社」や注記だけになる
+    ときは分けない。
     """
-    n = len(cells[name_col].split("\n"))
-    address_like = [c for c in cells if c and len(c.split("\n")) == n]
-    if n == 1 or len(address_like) < 2:
-        return [[c.replace("\n", " ") for c in cells]]
+    groups = [g.strip("\n") for g in cells[name_col].split(SEP)]
+    n = len(groups)
+    split_cols = [c for c, v in enumerate(cells) if v and len(v.split(SEP)) == n]
+    names = [_flat(g) for g in groups]
+    if n == 1 or len(split_cols) < 2 or any(_FRAGMENT.match(x.strip()) for x in names):
+        return [[_flat(c) for c in cells]]
     return [
-        [c.split("\n")[i] if len(c.split("\n")) == n else c.replace("\n", " ") for c in cells]
+        [_flat(v.split(SEP)[i]) if c in split_cols else _flat(v) for c, v in enumerate(cells)]
         for i in range(n)
     ]
 
@@ -164,10 +177,11 @@ def parse_affiliated_entities(html: str) -> list[dict[str, object]]:
             first, _, rest = texts_row[name_col].partition("\n")
             if rest and (cat := category_of(first)):
                 category = cat
-                texts_row[name_col] = rest
+                texts_row[name_col] = rest.removeprefix(SEP).lstrip("\n")
             for cells in _split_lines(texts_row, name_col):
                 name = cells[name_col]
-                if (cat := category_of(name)) and not any(cells[c] for c in others):
+                # 区分の行: 名称の列が区分で、住所・資本金・事業が空か区分と同じ文字（colspan）
+                if (cat := category_of(name)) and all(cells[c] in ("", name) for c in others):
                     category = cat
                     continue
                 if not name:
