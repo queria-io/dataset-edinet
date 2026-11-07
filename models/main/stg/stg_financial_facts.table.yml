@@ -4,6 +4,8 @@ title: EDINET 財務ファクト（有報・半期報告書・生データ）
 description: |-
   有価証券報告書と半期報告書の財務データを、XBRL の要素 ID × コンテキストの縦持ちで持つものです。1 行が 1 要素・1 コンテキストです。
 
+  - 元は提出された XBRL（書類取得 API type=1）です。過去の書類は取り直しの途中で、まだのものは EDINET が XBRL を変換した CSV（type=5）の行です。`source` で分けられます
+
   - `doc_type_code` で書類の種類を分けます（120=有価証券報告書、160=半期報告書）
   - 提出時点の本体だけで、訂正報告書による訂正は反映していません
 published: true
@@ -38,7 +40,7 @@ fields:
     description: XBRL 標準タクソノミの要素ID（例 jppfs_cor:NetSales）。横断比較の鍵
   - name: item_name
     title: 項目名
-    description: 要素の日本語ラベル
+    description: 要素の日本語ラベル。標準の要素は金融庁のタクソノミ、会社独自の要素は提出書類のラベルから取る
   - name: context_id
     title: コンテキストID
     description: 期間・連結区分・セグメントの識別子（CurrentYearInstant など）
@@ -57,12 +59,28 @@ fields:
     description: 円 / 株 / ％ 等
   - name: value
     title: 値
-    description: CSV の生の値（数値・テキストブロックを含む）
+    description: 提出された値（数値・文字列・テキストブロック）。空の値は「－」。テキストブロックは source が xbrl なら HTML、csv なら HTML を外して 30,000 字で切ったもの
   - name: numeric_value
     title: 数値
     description: value を数値化したもの（数値でない場合は NULL）
+  - name: decimals
+    title: 丸めの桁
+    description: XBRL の decimals。-6 なら百万円単位、-3 なら千円単位で丸めた値。source が csv の行は NULL
+  - name: is_nil
+    title: 空の値か
+    description: XBRL で値が空（xsi:nil）と書かれているか
+  - name: context_start
+    title: 期間の開始日
+    description: コンテキストの期間の開始日。時点の値と source が csv の行は NULL
+  - name: context_end
+    title: 期間の終了日・時点
+    description: コンテキストの期間の終了日、または時点の日付。source が csv の行は NULL
   - name: csv_type
     title: CSV様式コード
-    description: jpcrp030000-asr=有報本体 / jpaud=監査報告書 / jpsps=投信 等
+    description: source が csv の行だけ。jpcrp030000-asr=有報本体 / jpsps=投信 等
   - name: row_seq
-    title: CSV内行番号
+    title: 書類内の行番号
+    description: XBRL インスタンス（または CSV）の中の並び順
+  - name: source
+    title: 元データ
+    description: xbrl=提出された XBRL（type=1）/ csv=EDINET が変換した CSV（type=5）。過去の書類を XBRL で取り直すまでの区別

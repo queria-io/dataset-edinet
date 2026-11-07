@@ -86,3 +86,36 @@ def parse_instance(instance: bytes) -> tuple[dict[str, Context], list[Fact]]:
             )
         item.clear()
     return contexts, facts
+
+
+XLINK = "http://www.w3.org/1999/xlink"
+LINK = "http://www.xbrl.org/2003/linkbase"
+XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+
+
+def _xl(el: ET.Element, name: str) -> str:
+    return el.get(f"{{{XLINK}}}{name}", "")
+
+
+def _element_id(href: str) -> str:
+    """``…xsd#jpcrp_cor_NetSales`` → ``jpcrp_cor:NetSales``（要素名に _ は入らない）。"""
+    prefix, _, local = href.rpartition("#")[2].rpartition("_")
+    return f"{prefix}:{local}"
+
+
+def parse_labels(linkbase: bytes) -> list[tuple[str, str, str, str]]:
+    """ラベルのリンクベースから ``(element_id, role, lang, label)`` を返す。"""
+    root = ET.fromstring(linkbase)
+    out: list[tuple[str, str, str, str]] = []
+    for link in root.iter(f"{{{LINK}}}labelLink"):
+        locs = {_xl(e, "label"): _element_id(_xl(e, "href")) for e in link.iter(f"{{{LINK}}}loc")}
+        labels: dict[str, list[ET.Element]] = {}
+        for e in link.iter(f"{{{LINK}}}label"):
+            labels.setdefault(_xl(e, "label"), []).append(e)
+        out += [
+            (locs[_xl(arc, "from")], _xl(lab, "role"), lab.get(XML_LANG, ""), (lab.text or "").strip())
+            for arc in link.iter(f"{{{LINK}}}labelArc")
+            if _xl(arc, "from") in locs
+            for lab in labels.get(_xl(arc, "to"), [])
+        ]
+    return out

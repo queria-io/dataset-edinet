@@ -13,6 +13,7 @@ queria の DuckLake カタログ (QUERIA_* 環境変数で注入) の ``_source.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -26,7 +27,8 @@ from dbt.cli.main import dbtRunner
 
 from queria import Secret
 
-from edinet import affiliates, xbrl
+from edinet import affiliates, taxonomy, xbrl
+from edinet.xbrl_facts import parse_instance, parse_labels
 from edinet.client import EdinetClient
 from edinet.codelist import (
     COMPANY_FIELDS,
@@ -45,7 +47,10 @@ COMPANIES_TABLE = "edinet._source.companies"
 FUNDS_TABLE = "edinet._source.funds"
 FINANCIAL_FACTS_TABLE = "edinet._source.financial_facts"
 FINANCIAL_PROGRESS_TABLE = "edinet._source.financial_fetch_progress"
-TEXTBLOCKS_TABLE = "edinet._source.textblocks"
+XBRL_FACTS_TABLE = "edinet._source.xbrl_facts"
+XBRL_CONTEXTS_TABLE = "edinet._source.xbrl_contexts"
+XBRL_LABELS_TABLE = "edinet._source.xbrl_labels"
+TAXONOMY_LABELS_TABLE = "edinet._source.taxonomy_labels"
 XBRL_PROGRESS_TABLE = "edinet._source.xbrl_fetch_progress"
 AFFILIATES_TABLE = "edinet._source.affiliated_entities"
 
@@ -128,15 +133,28 @@ _FINANCIAL_PROGRESS_ARROW_SCHEMA = pa.schema(
     ]
 )
 
-_TEXTBLOCKS_ARROW_SCHEMA = pa.schema(
+_XBRL_FACTS_ARROW_SCHEMA = pa.schema(
     [
         ("doc_id", pa.string()),
+        ("seq", pa.int32()),
         ("element_id", pa.string()),
         ("context_id", pa.string()),
-        ("html", pa.string()),
+        ("unit_id", pa.string()),
+        ("decimals", pa.string()),
+        ("is_nil", pa.bool_()),
+        ("value", pa.string()),
         ("_fetched_at", pa.timestamp("us")),
     ]
 )
+
+_XBRL_CONTEXTS_ARROW_SCHEMA = pa.schema(
+    [("doc_id", pa.string()), ("context_id", pa.string())]
+    + [(f, pa.string()) for f in ("period_start", "period_end", "instant", "members")]
+)
+
+_LABEL_FIELDS = [("element_id", pa.string()), ("role", pa.string()), ("lang", pa.string()), ("label", pa.string())]
+_XBRL_LABELS_ARROW_SCHEMA = pa.schema([("doc_id", pa.string()), *_LABEL_FIELDS])
+_TAXONOMY_LABELS_ARROW_SCHEMA = pa.schema([("release", pa.string()), *_LABEL_FIELDS])
 
 _AFFILIATES_ARROW_SCHEMA = pa.schema(
     [("doc_id", pa.string()), ("context_id", pa.string()), ("row_seq", pa.int32())]
@@ -155,16 +173,18 @@ RECENT_REFETCH_DAYS = 7
 # 数日かけて履歴が埋まる。未取得分は新しい日付から順に取得する。
 DEFAULT_MAX_DATES_PER_RUN = 1000
 
+# 財務 CSV (type=5) の取り込みは止め、type=1 の XBRL に一本化した。既に取った CSV は
+# XBRL を取り直すまでの間だけ使う（stg_financial_facts）。環境変数で書類種別を渡すと再開する。
 # 財務ファクト取り込みの既定。対象書類種別 (docTypeCode) はカンマ区切りで上書き可
 # （120=有価証券報告書、160=半期報告書。140=四半期報告書, 130=訂正有報 等へ拡張可能）。
 # 上場会社は 2024 年 4 月以降、四半期報告書が廃止され半期報告書に一本化された。
-DEFAULT_FINANCIAL_DOC_TYPES = "120,160"
+DEFAULT_FINANCIAL_DOC_TYPES = ""
 # 1 回の実行で財務 CSV を取得する書類数の上限（type=5 は documents より重い）。
 DEFAULT_MAX_DOCS_PER_RUN = 1000
-# XBRL 本体 (type=1) からテキストブロックを取る書類種別（開示府令の様式のものだけ）と 1 回の上限。ZIP は 1 件
-# 0.6〜3MB で CSV より重いので、財務 CSV より少なくする（4 秒間隔で 300 件 = 20 分）
-DEFAULT_XBRL_DOC_TYPES = "120"
-DEFAULT_MAX_XBRL_DOCS_PER_RUN = 300
+# XBRL 本体 (type=1) を取る書類種別と 1 回の上限。ZIP は 1 件 0.6〜3MB で、4 秒間隔で
+# 1000 件 = 約 1.5 時間。過去分（約 10 万件）は日次の実行で新しい順に埋まる
+DEFAULT_XBRL_DOC_TYPES = "120,160"
+DEFAULT_MAX_XBRL_DOCS_PER_RUN = 1000
 # 何書類分をまとめて 1 トランザクションでコミットするか。1 書類ごとの COMMIT を
 # 避け DuckLake のスナップショット/Parquet ファイル数を抑える。
 FINANCIAL_BATCH_SIZE = 50
@@ -242,8 +262,9 @@ def main() -> None:
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
         ingest_financial_facts(conn, client, doc_ids, secret)
         xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret)
-        logger.info("fetch XBRL text blocks for %d docs", len(xbrl_doc_ids))
-        ingest_textblocks(conn, client, xbrl_doc_ids, secret)
+        logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
+        ingest_xbrl(conn, client, xbrl_doc_ids, secret)
+        ingest_taxonomy(conn)
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
             reparse_affiliates(conn)
 
@@ -373,31 +394,85 @@ def ingest_financial_facts(
     flush()
 
 
-def _affiliate_rows(doc_id: str, blocks: list[tuple[str, str, str]]) -> list[dict]:
-    """テキストブロックのうち関係会社の状況を 1 社 1 行に分ける。"""
+AFFILIATES_ELEMENT = "jpcrp_cor:OverviewOfAffiliatedEntitiesTextBlock"
+
+
+def _affiliate_rows(doc_id: str, facts: list[dict]) -> list[dict]:
+    """関係会社の状況のテキストブロックを 1 社 1 行に分ける。"""
     return [
-        {"doc_id": doc_id, "context_id": context_id, **row}
-        for element_id, context_id, html in blocks
-        if element_id == "jpcrp_cor:OverviewOfAffiliatedEntitiesTextBlock"
-        for row in affiliates.parse_affiliated_entities(html)
+        {"doc_id": doc_id, "context_id": f["context_id"], **row}
+        for f in facts
+        if f["element_id"] == AFFILIATES_ELEMENT and f["value"]
+        for row in affiliates.parse_affiliated_entities(f["value"])
     ]
 
 
-def ingest_textblocks(
+def _read_xbrl(doc_id: str, raw: bytes | None, now: datetime) -> dict[str, list[dict]]:
+    """type=1 の ZIP を、値・context・会社のラベル・関係会社の行に分ける。"""
+    instance = xbrl.instance_from_zip(raw) if raw else None
+    if instance is None:
+        return {"facts": [], "contexts": [], "labels": [], "affiliates": []}
+    contexts, facts = parse_instance(instance)
+    fact_rows = [
+        {
+            "doc_id": doc_id,
+            "seq": seq,
+            "element_id": f.element_id,
+            "context_id": f.context_id,
+            "unit_id": f.unit_id,
+            "decimals": f.decimals,
+            "is_nil": f.is_nil,
+            # テキストブロックの HTML は表の構造に要らない属性を外して持つ
+            "value": xbrl.clean_html(f.value) if f.value and f.element_id.endswith("TextBlock") else f.value,
+            "_fetched_at": now,
+        }
+        for seq, f in enumerate(facts)
+    ]
+    return {
+        "facts": fact_rows,
+        "contexts": [
+            {
+                "doc_id": doc_id,
+                "context_id": cid,
+                "period_start": c.start,
+                "period_end": c.end,
+                "instant": c.instant,
+                "members": json.dumps([list(m) for m in c.members]) if c.members else None,
+            }
+            for cid, c in contexts.items()
+        ],
+        "labels": [
+            {"doc_id": doc_id, "element_id": e, "role": r, "lang": lang, "label": text}
+            for lab in xbrl.label_files_from_zip(raw)
+            for e, r, lang, text in parse_labels(lab)
+        ],
+        "affiliates": _affiliate_rows(doc_id, fact_rows),
+    }
+
+
+_XBRL_TABLES = (
+    ("facts", XBRL_FACTS_TABLE, _XBRL_FACTS_ARROW_SCHEMA),
+    ("contexts", XBRL_CONTEXTS_TABLE, _XBRL_CONTEXTS_ARROW_SCHEMA),
+    ("labels", XBRL_LABELS_TABLE, _XBRL_LABELS_ARROW_SCHEMA),
+    ("affiliates", AFFILIATES_TABLE, _AFFILIATES_ARROW_SCHEMA),
+    ("progress", XBRL_PROGRESS_TABLE, _FINANCIAL_PROGRESS_ARROW_SCHEMA),
+)
+
+
+def ingest_xbrl(
     conn: duckdb.DuckDBPyConnection,
     client: EdinetClient,
     doc_ids: list[str],
     secret: Secret | None = None,
 ) -> None:
-    """XBRL 本体 (type=1) から関係会社などのテキストブロックを取り、関係会社を表に分ける。
+    """XBRL 本体 (type=1) を取り、値・context・会社のラベルと関係会社の表を入れる。
 
-    HTML も残すので、読み方を直したときは取り直さずに ``reparse_affiliates`` で作り直せる。
-    バッチの扱いは ``ingest_financial_facts`` と同じ。
+    値はインスタンスに書かれたまま入れ、項目名や相対年度は dbt で付ける。
+    テキストブロックの HTML も値として残すので、関係会社の読み方を直したときは
+    取り直さずに ``reparse_affiliates`` で作り直せる。バッチの扱いは ``ingest_financial_facts`` と同じ。
     """
     total = len(doc_ids)
-    blocks: list[dict] = []
-    rows: list[dict] = []
-    progress: list[dict] = []
+    batch: dict[str, list[dict]] = {key: [] for key, _, _ in _XBRL_TABLES}
     docs: list[str] = []
 
     def flush() -> None:
@@ -405,58 +480,46 @@ def ingest_textblocks(
             return
         ph = ", ".join("?" for _ in docs)
         conn.execute("BEGIN")
-        for table in (TEXTBLOCKS_TABLE, AFFILIATES_TABLE, XBRL_PROGRESS_TABLE):
+        for key, table, schema in _XBRL_TABLES:
             conn.execute(f"DELETE FROM {table} WHERE doc_id IN ({ph})", docs)
-        for table, data, schema in (
-            (TEXTBLOCKS_TABLE, blocks, _TEXTBLOCKS_ARROW_SCHEMA),
-            (AFFILIATES_TABLE, rows, _AFFILIATES_ARROW_SCHEMA),
-            (XBRL_PROGRESS_TABLE, progress, _FINANCIAL_PROGRESS_ARROW_SCHEMA),
-        ):
-            if data:
-                conn.register("_batch", pa.Table.from_pylist(data, schema=schema))
+            if batch[key]:
+                conn.register("_batch", pa.Table.from_pylist(batch[key], schema=schema))
                 conn.execute(f"INSERT INTO {table} SELECT * FROM _batch")
                 conn.unregister("_batch")
         conn.execute("COMMIT")
-        for buf in (blocks, rows, progress, docs):
-            buf.clear()
+        for rows in batch.values():
+            rows.clear()
+        docs.clear()
 
     for i, doc_id in enumerate(doc_ids, 1):
         if secret is not None:
             secret.refresh_if_due()
-        raw = client.get_document_xbrl(doc_id)
-        instance = xbrl.instance_from_zip(raw) if raw else None
-        found = xbrl.extract_textblocks(instance) if instance else []
         now = datetime.now()
-        blocks.extend(
-            {"doc_id": doc_id, "element_id": e, "context_id": c, "html": h, "_fetched_at": now}
-            for e, c, h in found
-        )
-        rows.extend(_affiliate_rows(doc_id, found))
-        progress.append(
-            {
-                "doc_id": doc_id,
-                "fetched_at": now,
-                "row_count": len(found),
-                "status": "done" if found else "empty",
-            }
+        read = _read_xbrl(doc_id, client.get_document_xbrl(doc_id), now)
+        for key, rows in read.items():
+            batch[key].extend(rows)
+        n = len(read["facts"])
+        batch["progress"].append(
+            {"doc_id": doc_id, "fetched_at": now, "row_count": n, "status": "done" if n else "empty"}
         )
         docs.append(doc_id)
         if len(docs) >= FINANCIAL_BATCH_SIZE:
             flush()
-            logger.info("  %d/%d docs (XBRL text blocks)", i, total)
+            logger.info("  %d/%d docs (XBRL)", i, total)
     flush()
 
 
 def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
     """保存済みの HTML から関係会社の表を全件作り直す（読み方を直したとき用）。"""
     found = conn.execute(
-        f"SELECT doc_id, element_id, context_id, html FROM {TEXTBLOCKS_TABLE} "
-        "WHERE element_id = 'jpcrp_cor:OverviewOfAffiliatedEntitiesTextBlock'"
+        f"SELECT doc_id, element_id, context_id, value FROM {XBRL_FACTS_TABLE} "
+        "WHERE element_id = ?",
+        [AFFILIATES_ELEMENT],
     ).fetchall()
     rows = [
         row
-        for doc_id, element_id, context_id, html in found
-        for row in _affiliate_rows(doc_id, [(element_id, context_id, html)])
+        for doc_id, element_id, context_id, value in found
+        for row in _affiliate_rows(doc_id, [{"element_id": element_id, "context_id": context_id, "value": value}])
     ]
     conn.execute("BEGIN")
     conn.execute(f"DELETE FROM {AFFILIATES_TABLE}")
@@ -468,10 +531,34 @@ def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
     logger.info("reparsed affiliated entities: %d rows from %d docs", len(rows), len(found))
 
 
+def ingest_taxonomy(conn: duckdb.DuckDBPyConnection) -> None:
+    """金融庁が公表したタクソノミのうち、まだ入れていない年版のラベルを入れる。
+
+    公表ページを読めないときは飛ばす（ラベルの抜けは dbt のテストが見つける）。
+    """
+    have = {r[0] for r in conn.execute(f"SELECT DISTINCT release FROM {TAXONOMY_LABELS_TABLE}").fetchall()}
+    try:
+        releases = [(r, url) for r, url in taxonomy.list_releases() if r not in have]
+    except OSError as e:
+        logger.warning("taxonomy: release list unavailable (%s)", e)
+        return
+    for release, url in releases:
+        rows = [
+            {"release": release, "element_id": e, "role": r, "lang": lang, "label": text}
+            for e, r, lang, text in taxonomy.release_labels(taxonomy.fetch(url))
+        ]
+        conn.execute("BEGIN")
+        conn.register("_batch", pa.Table.from_pylist(rows, schema=_TAXONOMY_LABELS_ARROW_SCHEMA))
+        conn.execute(f"INSERT INTO {TAXONOMY_LABELS_TABLE} SELECT * FROM _batch")
+        conn.unregister("_batch")
+        conn.execute("COMMIT")
+        logger.info("taxonomy %s: %d labels", release, len(rows))
+
+
 def _xbrl_docs_to_fetch(
     conn: duckdb.DuckDBPyConnection, secret: Secret | None = None
 ) -> list[str]:
-    """XBRL のテキストブロックを未取得の書類を、提出日時の新しい順に返す（上限あり）。"""
+    """XBRL を未取得の書類を、提出日時の新しい順に返す（上限あり）。"""
     doc_types = [
         t.strip()
         for t in os.environ.get("EDINET_XBRL_DOC_TYPES", DEFAULT_XBRL_DOC_TYPES).split(",")
@@ -494,9 +581,6 @@ def _xbrl_docs_to_fetch(
         WHERE d."docTypeCode" IN ({ph})
           AND d."xbrlFlag" = '1'
           AND d."withdrawalStatus" = '0'
-          -- 企業内容等の開示に関する内閣府令の様式だけ。投資信託・投資法人など
-          -- 特定有価証券の様式（030）には関係会社の状況などの要素が無い
-          AND d."ordinanceCode" = '010'
           AND p.doc_id IS NULL
         GROUP BY d."docID"
         ORDER BY max(d."submitDateTime") DESC
@@ -639,10 +723,18 @@ def _ensure_tables(conn: duckdb.DuckDBPyConnection) -> None:
 
 def _ensure_xbrl_tables(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
-        f"CREATE TABLE IF NOT EXISTS {TEXTBLOCKS_TABLE} "
-        "(doc_id VARCHAR, element_id VARCHAR, context_id VARCHAR, html VARCHAR, "
-        "_fetched_at TIMESTAMP)"
+        f"CREATE TABLE IF NOT EXISTS {XBRL_FACTS_TABLE} "
+        "(doc_id VARCHAR, seq INTEGER, element_id VARCHAR, context_id VARCHAR, unit_id VARCHAR, "
+        "decimals VARCHAR, is_nil BOOLEAN, value VARCHAR, _fetched_at TIMESTAMP)"
     )
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS {XBRL_CONTEXTS_TABLE} "
+        "(doc_id VARCHAR, context_id VARCHAR, period_start VARCHAR, period_end VARCHAR, "
+        "instant VARCHAR, members VARCHAR)"
+    )
+    labels = "element_id VARCHAR, role VARCHAR, lang VARCHAR, label VARCHAR"
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {XBRL_LABELS_TABLE} (doc_id VARCHAR, {labels})")
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {TAXONOMY_LABELS_TABLE} (release VARCHAR, {labels})")
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {XBRL_PROGRESS_TABLE} "
         "(doc_id VARCHAR, fetched_at TIMESTAMP, row_count INTEGER, status VARCHAR)"

@@ -1,0 +1,15 @@
+schema: main
+name: raw_taxonomy_labels
+description: 金融庁が公表した EDINET タクソノミの年版ごとのラベル
+published: false
+fields:
+  - name: release
+    description: 年版（2026 など）
+  - name: element_id
+    description: 要素またはメンバーの ID
+  - name: role
+    description: ラベルの種類（XBRL のラベルロール）
+  - name: lang
+    description: 言語（ja / en）
+  - name: label
+    description: ラベル
