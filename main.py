@@ -227,6 +227,8 @@ def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | N
             conn.execute("INSTALL httpfs; LOAD httpfs;")
             # credential_chain はこの拡張にある
             conn.execute("INSTALL aws; LOAD aws;")
+            # profiles.yml と同じ。既定の 30 秒だと、大きなテーブルの読み込みが途中で切れる
+            conn.execute("SET http_timeout = 300; SET http_retries = 5;")
             # 認証情報は値として持たず、取り直せる形で持つ。鍵はどこにも置かれない。
             # **作っただけでは足りない** — DuckDB は期限を見て取り直さないので、
             # このビルドの長さだと途中で読み書きできなくなる。取り直しは呼ぶ側の
