@@ -267,8 +267,10 @@ def main() -> None:
     chosen = steps(sys.argv[1:])
     if "ingest" in chosen:
         ingest()
-    # 取り込みだけのときも、push が今のモデルの一覧を読めるよう manifest は作り直す
-    run_dbt(DBT_BUILD if "build" in chosen else DBT_PARSE, target)
+    # 取り込みだけのときは dbt を流さない。push は前回のビルドの target/manifest.json
+    # （compiled_code 入り）を使うので、コードを変えたら取り込みの前にビルドを流すこと
+    if "build" in chosen:
+        run_dbt(DBT_BUILD, target)
 
 
 def ingest() -> None:
@@ -300,7 +302,6 @@ def ingest() -> None:
             reparse_affiliates(conn, secret)
 
 
-DBT_PARSE: tuple[tuple[str, ...], ...] = (("parse",),)
 DBT_BUILD: tuple[tuple[str, ...], ...] = (
     ("seed",),
     ("run",),
