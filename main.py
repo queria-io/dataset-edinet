@@ -227,6 +227,8 @@ def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | N
             conn.execute("INSTALL httpfs; LOAD httpfs;")
             # credential_chain はこの拡張にある
             conn.execute("INSTALL aws; LOAD aws;")
+            # profiles.yml と同じ。既定の 30 秒だと、大きなテーブルの読み込みが途中で切れる
+            conn.execute("SET http_timeout = 300; SET http_retries = 5;")
             # 認証情報は値として持たず、取り直せる形で持つ。鍵はどこにも置かれない。
             # **作っただけでは足りない** — DuckDB は期限を見て取り直さないので、
             # このビルドの長さだと途中で読み書きできなくなる。取り直しは呼ぶ側の
@@ -245,9 +247,33 @@ def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | N
         conn.close()
 
 
-def main() -> None:
-    target = os.environ.get("DBT_TARGET", sys.argv[1] if len(sys.argv) > 1 else "default")
+STEPS = ("ingest", "build")
 
+
+def steps(argv: list[str]) -> list[str]:
+    """``python main.py [ingest] [build]``。省くと両方を順に流す。
+
+    取り込みとビルドを別々に公開できるようにする。ビルドやテストが落ちても、
+    取り込みだけを先に公開しておけば、同じ書類を取り直さずに済む。
+    """
+    unknown = [a for a in argv if a not in STEPS]
+    if unknown:
+        raise SystemExit(f"unknown step: {' '.join(unknown)} (choose from {', '.join(STEPS)})")
+    return [s for s in STEPS if s in argv] if argv else list(STEPS)
+
+
+def main() -> None:
+    target = os.environ.get("DBT_TARGET", "default")
+    chosen = steps(sys.argv[1:])
+    if "ingest" in chosen:
+        ingest()
+    # 取り込みだけのときは dbt を流さない。push は前回のビルドの target/manifest.json
+    # （compiled_code 入り）を使うので、コードを変えたら取り込みの前にビルドを流すこと
+    if "build" in chosen:
+        run_dbt(DBT_BUILD, target)
+
+
+def ingest() -> None:
     api_key = os.environ["EDINET_API_KEY"]
     rate = float(os.environ.get("EDINET_RATE_LIMIT_SECONDS", "4"))
     start = date.fromisoformat(
@@ -275,27 +301,29 @@ def main() -> None:
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
             reparse_affiliates(conn, secret)
 
+
+DBT_BUILD: tuple[tuple[str, ...], ...] = (
+    ("seed",),
+    ("run",),
+    # 取り込みの抜け（タクソノミの新しい公表・相対年度の命名・項目名）を見つけるテスト。
+    # 落ちたら公開しない
+    (
+        "test",
+        "--select",
+        "xbrl_namespaces_have_taxonomy",
+        "stg_financial_facts_labels_present",
+        "stg_financial_facts_relative_year_known",
+    ),
+    ("docs", "generate"),
+)
+
+
+def run_dbt(commands: tuple[tuple[str, ...], ...], target: str) -> None:
+    """``dbt deps`` のあとに、``commands`` を ``--target`` 付きで順に流す。"""
     dbt = dbtRunner()
-    for cmd in (
-        ["deps"],
-        ["seed", "--target", target],
-        ["run", "--target", target],
-        # 取り込みの抜け（タクソノミの新しい公表・相対年度の命名・項目名）を見つけるテスト。
-        # 落ちたら公開しない
-        [
-            "test",
-            "--target",
-            target,
-            "--select",
-            "xbrl_namespaces_have_taxonomy",
-            "stg_financial_facts_labels_present",
-            "stg_financial_facts_relative_year_known",
-        ],
-        ["docs", "generate", "--target", target],
-    ):
-        result = dbt.invoke(cmd)
-        if not result.success:
-            raise SystemExit(f"dbt {' '.join(cmd)} failed")
+    for args in (["deps"], *([*cmd, "--target", target] for cmd in commands)):
+        if not dbt.invoke(args).success:
+            raise SystemExit(f"dbt {' '.join(args)} failed")
 
 
 def ingest_documents(

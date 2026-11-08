@@ -166,3 +166,10 @@ git submodule update --init
 uv sync
 bash scripts/build.sh
 ```
+
+取り込みと dbt のビルドは、別々に実行して公開できます。ビルドやテストが失敗しても、先に公開した取り込みの分は残ります。取り込みだけの公開は前回のビルドの `target/manifest.json` を使うので、モデルを変えたあとは取り込みの前にビルドを流してください。
+
+```bash
+bash scripts/build.sh python main.py ingest   # 取り込みだけ（dbt は流さない）
+bash scripts/build.sh python main.py build    # dbt のビルドとテストだけ
+```

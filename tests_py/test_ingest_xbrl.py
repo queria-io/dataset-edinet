@@ -3,6 +3,7 @@ import zipfile
 from html import escape
 
 import duckdb
+import pytest
 
 import main
 from tests_py.test_affiliates import INLINE
@@ -82,3 +83,11 @@ def test_fetch_deadline():
     assert main.fetch_deadline("05:00", start) == datetime(2026, 11, 9, 5, 0)
     assert main.fetch_deadline("23:30", start) == datetime(2026, 11, 8, 23, 30)
     assert main.fetch_deadline(None, start) is None
+
+
+def test_steps():
+    assert main.steps([]) == ["ingest", "build"]
+    assert main.steps(["build"]) == ["build"]
+    assert main.steps(["build", "ingest"]) == ["ingest", "build"]
+    with pytest.raises(SystemExit):
+        main.steps(["default"])
