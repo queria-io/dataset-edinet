@@ -24,4 +24,5 @@ fields:
   - name: voting_rights
     description: 議決権の所有割合（又は被所有割合）の列の値。括弧内は間接所有の内数
   - name: relationship
-    description: 関係内容の列の値。見出しが 2 段のときは「役員の兼任等: 有 / 営業上の取引等: …」とつなぐ
+    description: |-
+      関係内容の列の値。見出しが 2 段のときは「役員の兼任等: 有 / 営業上の取引等: …」とつなぐ
