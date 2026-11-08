@@ -245,9 +245,31 @@ def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | N
         conn.close()
 
 
-def main() -> None:
-    target = os.environ.get("DBT_TARGET", sys.argv[1] if len(sys.argv) > 1 else "default")
+STEPS = ("ingest", "build")
 
+
+def steps(argv: list[str]) -> list[str]:
+    """``python main.py [ingest] [build]``。省くと両方を順に流す。
+
+    取り込みとビルドを別々に公開できるようにする。ビルドやテストが落ちても、
+    取り込みだけを先に公開しておけば、同じ書類を取り直さずに済む。
+    """
+    unknown = [a for a in argv if a not in STEPS]
+    if unknown:
+        raise SystemExit(f"unknown step: {' '.join(unknown)} (choose from {', '.join(STEPS)})")
+    return [s for s in STEPS if s in argv] if argv else list(STEPS)
+
+
+def main() -> None:
+    target = os.environ.get("DBT_TARGET", "default")
+    chosen = steps(sys.argv[1:])
+    if "ingest" in chosen:
+        ingest()
+    # 取り込みだけのときも、push が今のモデルの一覧を読めるよう manifest は作り直す
+    run_dbt(DBT_BUILD if "build" in chosen else DBT_PARSE, target)
+
+
+def ingest() -> None:
     api_key = os.environ["EDINET_API_KEY"]
     rate = float(os.environ.get("EDINET_RATE_LIMIT_SECONDS", "4"))
     start = date.fromisoformat(
@@ -275,27 +297,31 @@ def main() -> None:
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
             reparse_affiliates(conn, secret)
 
+
+DBT_PARSE: tuple[tuple[str, ...], ...] = (("deps",), ("parse",))
+DBT_BUILD: tuple[tuple[str, ...], ...] = (
+    ("deps",),
+    ("seed",),
+    ("run",),
+    # 取り込みの抜け（タクソノミの新しい公表・相対年度の命名・項目名）を見つけるテスト。
+    # 落ちたら公開しない
+    (
+        "test",
+        "--select",
+        "xbrl_namespaces_have_taxonomy",
+        "stg_financial_facts_labels_present",
+        "stg_financial_facts_relative_year_known",
+    ),
+    ("docs", "generate"),
+)
+
+
+def run_dbt(commands: tuple[tuple[str, ...], ...], target: str) -> None:
     dbt = dbtRunner()
-    for cmd in (
-        ["deps"],
-        ["seed", "--target", target],
-        ["run", "--target", target],
-        # 取り込みの抜け（タクソノミの新しい公表・相対年度の命名・項目名）を見つけるテスト。
-        # 落ちたら公開しない
-        [
-            "test",
-            "--target",
-            target,
-            "--select",
-            "xbrl_namespaces_have_taxonomy",
-            "stg_financial_facts_labels_present",
-            "stg_financial_facts_relative_year_known",
-        ],
-        ["docs", "generate", "--target", target],
-    ):
-        result = dbt.invoke(cmd)
-        if not result.success:
-            raise SystemExit(f"dbt {' '.join(cmd)} failed")
+    for cmd in commands:
+        args = [*cmd] if cmd == ("deps",) else [*cmd, "--target", target]
+        if not dbt.invoke(args).success:
+            raise SystemExit(f"dbt {' '.join(args)} failed")
 
 
 def ingest_documents(

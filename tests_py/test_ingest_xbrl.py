@@ -82,3 +82,15 @@ def test_fetch_deadline():
     assert main.fetch_deadline("05:00", start) == datetime(2026, 11, 9, 5, 0)
     assert main.fetch_deadline("23:30", start) == datetime(2026, 11, 8, 23, 30)
     assert main.fetch_deadline(None, start) is None
+
+
+def test_steps():
+    import pytest
+
+    from main import steps
+
+    assert steps([]) == ["ingest", "build"]
+    assert steps(["build"]) == ["build"]
+    assert steps(["build", "ingest"]) == ["ingest", "build"]
+    with pytest.raises(SystemExit):
+        steps(["default"])
