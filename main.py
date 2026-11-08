@@ -300,9 +300,8 @@ def ingest() -> None:
             reparse_affiliates(conn, secret)
 
 
-DBT_PARSE: tuple[tuple[str, ...], ...] = (("deps",), ("parse",))
+DBT_PARSE: tuple[tuple[str, ...], ...] = (("parse",),)
 DBT_BUILD: tuple[tuple[str, ...], ...] = (
-    ("deps",),
     ("seed",),
     ("run",),
     # 取り込みの抜け（タクソノミの新しい公表・相対年度の命名・項目名）を見つけるテスト。
@@ -319,9 +318,9 @@ DBT_BUILD: tuple[tuple[str, ...], ...] = (
 
 
 def run_dbt(commands: tuple[tuple[str, ...], ...], target: str) -> None:
+    """``dbt deps`` のあとに、``commands`` を ``--target`` 付きで順に流す。"""
     dbt = dbtRunner()
-    for cmd in commands:
-        args = [*cmd] if cmd == ("deps",) else [*cmd, "--target", target]
+    for args in (["deps"], *([*cmd, "--target", target] for cmd in commands)):
         if not dbt.invoke(args).success:
             raise SystemExit(f"dbt {' '.join(args)} failed")
 

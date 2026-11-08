@@ -13,7 +13,9 @@ seeds:
   - name: context_relative_years
     description: |
       XBRL のコンテキスト ID の頭（EDINET の命名規約）と、type=5 の CSV の「相対年度」の対応表。
-      type=1 の書類と CSV を突き合わせて、すべての行で CSV と同じ値になることを確かめたもの。
+      CurrentYearDuration〜Prior1InterimInstant の 15 行は、type=1 の書類と CSV を突き合わせて、
+      すべての行で CSV と同じ値になることを確かめたもの。それ以降の行は、取り込み済みの CSV に現れる
+      context の頭と「相対年度」の値をそのまま写したもの。
       CSV で相対年度が空の頭（RecordDateInstant など）は、空の値で入れる。
       新しい頭が出てきたら stg_financial_facts_relative_year_known のテストが落ちるので、ここに 1 行足す。
     columns:
