@@ -115,8 +115,16 @@ class EdinetClient:
                     out.append((csv_type, seq, [c or None for c in cols]))
         return out
 
+    def get_document_xbrl(self, doc_id: str) -> bytes | None:
+        """書類取得 API (type=1) で提出本文書と監査報告書の XBRL の ZIP を返す。無ければ None。"""
+        params = urllib.parse.urlencode(
+            {"type": "1", "Subscription-Key": self._api_key}
+        )
+        raw = self._request_bytes(f"{DOCUMENT_URL.format(doc_id=doc_id)}?{params}", doc_id)
+        return raw if raw is not None and raw[:2] == b"PK" else None
+
     def _request_bytes(self, url: str, doc_id: str) -> bytes | None:
-        """type=5 のバイナリ (ZIP) を取得する。404 (CSVなし/取下げ) は None を返す。"""
+        """書類取得 API のバイナリ (ZIP) を取得する。404 (書類なし/取下げ) は None を返す。"""
         for attempt in range(1, self._max_retries + 1):
             self._throttle()
             try:
@@ -127,7 +135,7 @@ class EdinetClient:
                     return resp.read()
             except urllib.error.HTTPError as e:
                 if e.code == 404:
-                    logger.info("doc=%s no CSV (404)", doc_id)
+                    logger.info("doc=%s not found (404)", doc_id)
                     return None
                 if e.code in RETRYABLE_STATUS and attempt < self._max_retries:
                     wait = self._rate_limit_seconds * 2**attempt
@@ -157,7 +165,7 @@ class EdinetClient:
                     time.sleep(wait)
                     continue
                 raise
-        raise RuntimeError(f"failed to fetch EDINET CSV for {doc_id}")
+        raise RuntimeError(f"failed to fetch EDINET document {doc_id}")
 
     def _request(self, url: str, target_date: str) -> dict:
         for attempt in range(1, self._max_retries + 1):

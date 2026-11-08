@@ -9,7 +9,8 @@
 | 書類一覧 API（documents.json、Version 2） | `main.mart_documents` |
 | EDINETコードリスト（EdinetcodeDlInfo.csv） | `main.mart_companies` |
 | ファンドコードリスト（FundcodeDlInfo.csv） | `main.mart_funds` |
-| 書類取得 API（type=5 の CSV。XBRL を構造化したもの） | `main.stg_financial_facts`・`main.mart_business_results`・`main.mart_human_capital`・`main.mart_company_profiles` |
+| 書類取得 API（type=1 の XBRL） | `main.stg_financial_facts`・`main.mart_business_results`・`main.mart_human_capital`・`main.mart_company_profiles`・`main.mart_affiliated_entities` |
+| EDINET タクソノミ（金融庁） | `main.stg_financial_facts` の項目名 |
 
 - [EDINET の利用規約](https://disclosure2.edinet-fsa.go.jp/)に従います
 - このサービスは、金融庁 EDINET の書類一覧 API・書類取得 API・EDINETコードリスト・ファンドコードリストを使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません
@@ -24,6 +25,7 @@
 | `main.stg_financial_facts` | 1 行が 1 要素・1 コンテキスト。有価証券報告書・半期報告書の財務データの本体 |
 | `main.mart_business_results` | 1 行が 1 書類・1 会計年度。有報の主要経営指標を会計基準をまたいで統一したもの |
 | `main.mart_human_capital` | 1 行が 1 書類。有報の従業員の状況・女性活躍と育児休業の指標・女性役員 |
+| `main.mart_affiliated_entities` | 1 行が 1 書類・1 関係会社。有報の関係会社の状況（親会社・連結子会社・持分法適用関連会社などの名称・住所・資本金・事業・議決権の所有割合・関係内容） |
 | `main.mart_company_profiles` | 1 行が 1 書類。有報の表紙（会社名・英訳名・本店の所在の場所・電話番号・最寄りの連絡場所）と連結子会社の数・研究開発費 |
 
 テーブルの結合:
@@ -84,6 +86,23 @@ GROUP BY c.industry
 ORDER BY median_salary DESC;
 ```
 
+ある会社の最新の有報に載っている連結子会社を、議決権の所有割合の高い順に並べる:
+
+```sql
+WITH latest AS (
+  SELECT doc_id
+  FROM edinet.main.mart_documents
+  WHERE sec_code = '72030' AND doc_type_code = '120' AND NOT is_withdrawn
+  ORDER BY submit_date DESC
+  LIMIT 1
+)
+SELECT name, address, capital_amount, capital_unit, business, voting_rights_ratio
+FROM edinet.main.mart_affiliated_entities
+JOIN latest USING (doc_id)
+WHERE category_group = '連結子会社'
+ORDER BY voting_rights_ratio DESC;
+```
+
 電話番号から会社を探す（数字だけにした列で比べます）:
 
 ```sql
@@ -107,6 +126,7 @@ ORDER BY submit_date DESC;
 - `context_id` は期間・連結区分・セグメントを表します。個別は `_NonConsolidatedMember` が付き、年度は `CurrentYear`・`PriorNYear` で分かれます
 - 半期報告書の値は中間期のものですが、`period_end` は中間期末ではなく事業年度末です。年度の値と混ぜないでください
 - `mart_business_results` は、連結の値があれば連結、無ければ個別の値です。IFRS 採用企業の値（RevenueIFRS など）は JP GAAP の列に統合しています。1 書類あたり当期から四期前までの最大 5 会計年度分の行があるので、同じ会計年度が複数の書類に出てきます。各年の有報の当期の値だけを使うときは `year_offset = 0` で絞ってください
+- `mart_affiliated_entities` は XBRL 本体（type=1）の「関係会社の状況」の表を列の見出しで読んで作っています。有報に載っている関係会社だけで、大きな会社は主要な関係会社だけを載せています（「上記以外の連結子会社数は 208 社」など）。名称に法人番号は付いていません。投資信託・投資法人の有報には関係会社の状況が無いので含みません。過去の書類は新しい提出日から順に取り込んでいる途中です
 - `mart_company_profiles` の表紙の値は提出日時点の記載のままです。電話番号の数字列（`head_office_phone_digits`）は、市外局番の無い記載（「東京(3352)1439」）や番号が 2 つある記載では NULL です。代表者・事務連絡者の氏名は含みません
 - 1 株当たり純資産は、IFRS 採用企業では 1 株当たり親会社所有者帰属持分です。外貨建て（USD）で開示された値は含みません。自己資本比率は 0〜1 の比率で、債務超過なら負の値です
 
@@ -137,7 +157,9 @@ ORDER BY submit_date DESC;
 
 1 回の実行で取得する日数には上限（`EDINET_MAX_DATES_PER_RUN`、既定 1000）があります。全期間を 1 回で取得すると CI のジョブの時間制限を超えるため、毎回ビルドと公開まで完了させ、進捗を `fetch_progress` に残します。次回の実行がその進捗を引き継ぐので、日次の実行で数日かけて履歴（新しい日付から順）が埋まります。遡って取得する開始日は環境変数 `EDINET_BACKFILL_START`（既定 `2016-01-01`）で変えられます。
 
-財務データは、書類一覧で csvFlag=1 の有価証券報告書・半期報告書を、書類取得 API（type=5 の CSV）から書類ごとに取得します。取得済みの書類は `_source.financial_fetch_progress` に記録し、CSV が無い書類は status='empty' として取得し直しません。1 回の実行の書類数の上限は `EDINET_MAX_DOCS_PER_RUN`（既定 1000）、対象の書類の種類は `EDINET_FINANCIAL_DOC_TYPES`（既定 `120,160`。四半期 140・訂正有報 130 などをカンマ区切りで追加できます）で変えられます。
+財務データは、書類一覧で xbrlFlag=1 の有価証券報告書・半期報告書を、書類取得 API（type=1 の XBRL）から書類ごとに取得します。インスタンスの値・context と、会社独自の項目の名前（ZIP 内の `_lab.xml`）を書かれたまま入れ、相対年度・連結/個別・項目名は dbt で付けます。取得済みの書類は `_source.xbrl_fetch_progress` に記録します。1 回の実行の書類数の上限は `EDINET_MAX_XBRL_DOCS_PER_RUN`（既定 1000）、取得をやめる時刻は `EDINET_FETCH_UNTIL`（`05:00` の形。夜間だけ取得するとき）、対象の書類の種類は `EDINET_XBRL_DOC_TYPES`（既定 `120,160`）で変えられます。過去の書類は新しい提出日から順に取り直している途中で、まだのものは以前に取った type=5 の CSV の行を使います（`stg_financial_facts.source` が `csv`）。
+
+標準の要素の名前は、金融庁が年 1 回公表する EDINET タクソノミから取ります。公表ページ（https://www.fsa.go.jp/search/）からまだ入れていない年版を見つけて `_source.taxonomy_labels` に入れるので、新しい年版の追加に手作業は要りません。直近 1 年の書類に名前の付かない要素があると、dbt のテスト（`stg_financial_facts_labels_present`）が失敗します。
 
 ```bash
 git submodule update --init

@@ -23,3 +23,10 @@ schedule = "daily"
 
 [tool.queria.schemas.main]
 title = "EDINET 書類一覧"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests_py"]

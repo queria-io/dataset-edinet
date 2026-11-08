@@ -1,0 +1,16 @@
+context_prefix,relative_year
+CurrentYearDuration,当期
+CurrentYearInstant,当期末
+Prior1YearDuration,前期
+Prior1YearInstant,前期末
+Prior2YearDuration,前々期
+Prior2YearInstant,前々期末
+Prior3YearDuration,三期前
+Prior3YearInstant,三期前時点
+Prior4YearDuration,四期前
+Prior4YearInstant,四期前時点
+FilingDateInstant,提出日時点
+InterimDuration,当中間期
+InterimInstant,当中間期末
+Prior1InterimDuration,前中間期
+Prior1InterimInstant,前中間期末

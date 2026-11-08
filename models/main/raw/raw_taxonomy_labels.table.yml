@@ -1,0 +1,19 @@
+schema: main
+name: raw_taxonomy_labels
+description: 金融庁が公表した EDINET タクソノミの年版ごとのラベル
+published: false
+fields:
+  - name: release
+    description: 公表ページの日付（20251111 など）。年版の途中の改訂も別の値になる
+  - name: namespace
+    description: ラベルのファイルのあるモジュールと日付（jppfs/2025-11-01 など）。書類の名前空間の URI と突き合わせる
+  - name: file
+    description: ラベルのファイル名（jpdei_2024-11-01_lab.xml など）。同じ名前空間に新旧のファイルがあるとき、日付の新しい方を使う
+  - name: element_id
+    description: 要素またはメンバーの ID
+  - name: role
+    description: ラベルの種類（XBRL のラベルロール）
+  - name: lang
+    description: 言語（ja / en）
+  - name: label
+    description: ラベル

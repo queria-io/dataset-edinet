@@ -13,3 +13,15 @@ sources:
         description: ファンドコードリスト（FundcodeDlInfo.csv）のファンドマスタ
       - name: financial_facts
         description: 書類取得 API (type=5 CSV) の財務データ本体（要素ID×コンテキストの縦持ちファクト）
+      - name: xbrl_facts
+        description: 書類取得 API (type=1) の XBRL インスタンスの値。1 行が 1 要素・1 コンテキスト。書かれたまま（テキストブロックは HTML）
+      - name: xbrl_contexts
+        description: XBRL インスタンスの context（期間と、軸・メンバーの組）
+      - name: xbrl_labels
+        description: type=1 の ZIP の会社独自のラベル（_lab.xml）。会社独自の要素とメンバー（セグメントなど）の名前
+      - name: xbrl_namespaces
+        description: XBRL インスタンスの名前空間の接頭辞と URI
+      - name: taxonomy_labels
+        description: 金融庁が公表した EDINET タクソノミの年版ごとのラベル（標準の要素とメンバーの名前）
+      - name: affiliated_entities
+        description: xbrl_facts の関係会社の状況（テキストブロック）を 1 社 1 行に分けたもの（値は記載のまま）

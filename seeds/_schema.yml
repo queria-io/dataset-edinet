@@ -10,3 +10,13 @@ seeds:
         description: 書類種別コード（3桁）
       - name: doc_type_name
         description: 書類種別名称
+  - name: context_relative_years
+    description: |
+      XBRL のコンテキスト ID の頭（EDINET の命名規約）と、type=5 の CSV の「相対年度」の対応表。
+      type=1 の書類と CSV を突き合わせて、すべての行で CSV と同じ値になることを確かめたもの。
+      新しい頭が出てきたら stg_financial_facts_relative_year_known のテストが落ちるので、ここに 1 行足す。
+    columns:
+      - name: context_prefix
+        description: コンテキスト ID の最初の _ より前（CurrentYearDuration など）
+      - name: relative_year
+        description: 相対年度（当期・前期末・提出日時点など）

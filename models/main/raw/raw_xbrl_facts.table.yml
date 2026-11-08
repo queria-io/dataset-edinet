@@ -1,0 +1,23 @@
+schema: main
+name: raw_xbrl_facts
+description: XBRL（書類取得 API type=1）のインスタンスの値。1 行が 1 要素・1 コンテキストで、書かれたまま VARCHAR で持つ
+published: false
+fields:
+  - name: doc_id
+    description: 書類管理番号
+  - name: seq
+    description: インスタンスの中の並び順（0 始まり）
+  - name: element_id
+    description: 要素 ID（例 jppfs_cor:NetSales）
+  - name: context_id
+    description: コンテキスト ID
+  - name: unit_id
+    description: 単位 ID。文字列の値は空
+  - name: decimals
+    description: 丸めの桁（-6 なら百万円単位）
+  - name: is_nil
+    description: 値が空（xsi:nil）か
+  - name: value
+    description: 値。テキストブロックは HTML
+  - name: _fetched_at
+    description: 取得日時
