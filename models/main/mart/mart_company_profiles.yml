@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: mart_company_profiles
+    description: >-
+      有価証券報告書の表紙（会社名・英訳名・本店の所在の場所・電話番号・最寄りの連絡場所）と、連結子会社の数・研究開発費を 1 書類 = 1 行にまとめた表。表紙は提出日時点の記載で、本店の移転や電話番号の変更は各年の有報の行を並べて追う。電話番号は記載のままの列と、数字だけにした列を持つ。代表者・事務連絡者の氏名は持たない。
+    columns:
+      - name: doc_id
+        data_tests: [unique, not_null]
+      - name: edinet_code
+      - name: sec_code
+      - name: corporate_number
+      - name: filer_name
+      - name: period_end
+      - name: fiscal_year
+      - name: submit_date
+      - name: company_name
+      - name: company_name_en
+      - name: head_office_address
+      - name: head_office_phone
+      - name: contact_address
+      - name: contact_phone
+      - name: consolidated_subsidiaries
+      - name: research_and_development_expenses
+      - name: head_office_phone_digits
+      - name: contact_phone_digits

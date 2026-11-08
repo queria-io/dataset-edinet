@@ -1,0 +1,63 @@
+schema: main
+name: mart_company_profiles
+title: EDINET 有報の表紙と会社の概要
+description: |-
+  有価証券報告書の表紙に書かれた会社名・英訳名・本店の所在の場所・電話番号・最寄りの連絡場所と、連結子会社の数・研究開発費を、1 書類 1 行にまとめたものです。
+
+  - 表紙は有報の提出日時点の記載です。本店の移転や電話番号の変更は、各年の有報の行を並べて確認してください
+  - 電話番号は記載のままの列と、数字だけにした列（`head_office_phone_digits`）があります
+  - 代表者・事務連絡者の氏名は含みません
+published: true
+sources:
+  - path: https://disclosure2.edinet-fsa.go.jp/
+fields:
+  - name: doc_id
+    title: 書類管理番号
+    description: mart_documents / stg_financial_facts と結合できる
+  - name: edinet_code
+    title: 提出者EDINETコード
+    description: mart_companies と結合でき、業種を引ける
+  - name: sec_code
+    title: 提出者証券コード
+  - name: corporate_number
+    title: 提出者法人番号
+    description: 13桁。houjin_bangou / gbizinfo と結合できる
+    semantic: { role: entity, name: corporate_number }
+  - name: filer_name
+    title: 提出者名
+  - name: period_end
+    title: 当期会計期間（至）
+  - name: fiscal_year
+    title: 会計年度
+    description: period_end の年
+  - name: submit_date
+    title: 提出日
+  - name: company_name
+    title: 会社名（表紙）
+    description: 表紙の記載のまま。商号変更の直後は「（旧会社名 …）」が付くことがある
+  - name: company_name_en
+    title: 英訳名（表紙）
+    description: schema.org の alternateName にあたる。表紙の記載のまま
+  - name: head_office_address
+    title: 本店の所在の場所（表紙）
+    description: schema.org の address にあたる。登記上の本店で、都道府県名から始まる。実際の本社業務を別の場所で行う旨の注記が付くことがある
+  - name: head_office_phone
+    title: 本店の電話番号（表紙）
+    description: 表紙の記載のまま（「03-1234-5678（代表）」「東京(03)1234－5678」など）
+  - name: contact_address
+    title: 最寄りの連絡場所（表紙）
+    description: 本店と同じときは本店の住所か「同上」などが書かれる
+  - name: contact_phone
+    title: 最寄りの連絡場所の電話番号（表紙）
+  - name: consolidated_subsidiaries
+    title: 連結子会社の数
+    description: 当期末。連結財務諸表を作らない会社は NULL
+  - name: research_and_development_expenses
+    title: 研究開発費
+    description: 円。「研究開発活動」に書かれた当期の合計。研究開発活動が無い会社と、セグメント別にだけ書いた会社は NULL
+  - name: head_office_phone_digits
+    title: 本店の電話番号（数字のみ）
+    description: schema.org の telephone にあたる。head_office_phone から数字だけを抜き出したもの。全角は半角にする。0 で始まる 10〜11 桁にならない値（市外局番の無い「東京(3352)1439」、番号が 2 つある記載など）は NULL
+  - name: contact_phone_digits
+    title: 最寄りの連絡場所の電話番号（数字のみ）
+    description: contact_phone を head_office_phone_digits と同じ方法で数字だけにしたもの
