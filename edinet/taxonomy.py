@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import io
 import re
-import urllib.request
 import zipfile
 
+from edinet.codelist import _download as fetch  # 一時的なエラーをリトライする
 from edinet.xbrl_facts import parse_labels
 
 BASE = "https://www.fsa.go.jp"
@@ -25,19 +25,14 @@ PAST_PAGES = ("20150310", "20160314", "20170228", "20180228", "20180316", "20190
 _NAMESPACE = re.compile(r"/taxonomy/([^/]+/\d{4}-\d{2}-\d{2})/")
 
 
-def fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "queria-dataset-edinet"})
-    with urllib.request.urlopen(req, timeout=120) as res:
-        return res.read()
-
-
-def list_releases() -> list[tuple[str, str]]:
+def list_releases(skip: set[str] = frozenset()) -> list[tuple[str, str]]:
     """公表済みのタクソノミを ``(公表ページの日付, ZIP の URL)`` で返す。案は除く。
 
     年版の途中の改訂もあるので、公表ページの日付（20251111 など）で年版を区別する。
+    ``skip`` の日付（取り込み済み）のページは読まない。
     """
     index = fetch(f"{BASE}/search/index.html").decode("utf-8", "replace")
-    pages = ((p, fetch(f"{BASE}/search/{p}.html").decode("utf-8", "replace")) for p in sorted({*PAST_PAGES, *_PAGE.findall(index)}))
+    pages = ((p, fetch(f"{BASE}/search/{p}.html").decode("utf-8", "replace")) for p in sorted({*PAST_PAGES, *_PAGE.findall(index)} - skip))
     return [
         (p, BASE + z.group(1))
         for p, html in pages

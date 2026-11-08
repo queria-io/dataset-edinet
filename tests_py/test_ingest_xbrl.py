@@ -39,7 +39,7 @@ class FakeClient:
         return _zip(INLINE.replace("<td>", '<td style="x">')) if doc_id == "S1" else None
 
 
-def test_ingest_xbrl_and_reparse():
+def test_ingest_xbrl_and_reparse(monkeypatch):
     conn = duckdb.connect()
     conn.execute("ATTACH ':memory:' AS edinet")
     conn.execute("CREATE SCHEMA edinet._source")
@@ -67,5 +67,18 @@ def test_ingest_xbrl_and_reparse():
     names = f"SELECT name, category FROM {main.AFFILIATES_TABLE} ORDER BY row_seq"
     expected = [("㈱エー（注）３", "連結子会社"), ("㈱ビー", "持分法適用関連会社"), ("㈱シー", "持分法適用関連会社")]
     assert conn.execute(names).fetchall() == expected
+    # DuckLake のファイル一覧の代わりに進捗表をそのまま読む
+    monkeypatch.setattr(
+        main, "_fetched_doc_ids", lambda conn, secret, table: conn.execute(f"SELECT doc_id FROM edinet._source.{table}").fetch_arrow_table()
+    )
     main.reparse_affiliates(conn)
     assert conn.execute(names).fetchall() == expected
+
+
+def test_fetch_deadline():
+    from datetime import datetime
+
+    start = datetime(2026, 11, 8, 20, 0)
+    assert main.fetch_deadline("05:00", start) == datetime(2026, 11, 9, 5, 0)
+    assert main.fetch_deadline("23:30", start) == datetime(2026, 11, 8, 23, 30)
+    assert main.fetch_deadline(None, start) is None

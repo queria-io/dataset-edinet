@@ -80,7 +80,7 @@ def parse_instance(instance: bytes) -> tuple[dict[str, str], dict[str, Context],
                     context_id=item.get("contextRef", ""),
                     unit_id=item.get("unitRef"),
                     decimals=item.get("decimals"),
-                    is_nil=item.get(XSI_NIL) == "true",
+                    is_nil=item.get(XSI_NIL) in ("true", "1"),
                     value=item.text,
                 )
             )

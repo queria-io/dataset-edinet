@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sys
+import zipfile
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -179,11 +180,9 @@ RECENT_REFETCH_DAYS = 7
 # 数日かけて履歴が埋まる。未取得分は新しい日付から順に取得する。
 DEFAULT_MAX_DATES_PER_RUN = 1000
 
-# 財務 CSV (type=5) の取り込みは止め、type=1 の XBRL に一本化した。既に取った CSV は
-# XBRL を取り直すまでの間だけ使う（stg_financial_facts）。環境変数で書類種別を渡すと再開する。
-# 財務ファクト取り込みの既定。対象書類種別 (docTypeCode) はカンマ区切りで上書き可
-# （120=有価証券報告書、160=半期報告書。140=四半期報告書, 130=訂正有報 等へ拡張可能）。
-# 上場会社は 2024 年 4 月以降、四半期報告書が廃止され半期報告書に一本化された。
+# 財務 CSV (type=5) の取り込みの対象書類種別。既定では取らない（財務の値は type=1 の XBRL から取る）。
+# 既に取った CSV は、XBRL を取り直すまでの書類だけ stg_financial_facts で使う。
+# カンマ区切りの docTypeCode（120=有価証券報告書、160=半期報告書 など）を渡すと取る。
 DEFAULT_FINANCIAL_DOC_TYPES = ""
 # 1 回の実行で財務 CSV を取得する書類数の上限（type=5 は documents より重い）。
 DEFAULT_MAX_DOCS_PER_RUN = 1000
@@ -197,6 +196,8 @@ FINANCIAL_BATCH_SIZE = 50
 # 進捗表を読むときに 1 文で読むデータファイルの本数。1 文が認証情報の期限
 # （最短 15 分）に収まる大きさにする。
 PROGRESS_READ_BATCH_FILES = 500
+# 関係会社を作り直すときに 1 文で読む書類の数
+REPARSE_BATCH_DOCS = 5000
 
 
 @contextmanager
@@ -270,15 +271,26 @@ def main() -> None:
         xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret)
         logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
         ingest_xbrl(conn, client, xbrl_doc_ids, secret)
-        ingest_taxonomy(conn)
+        ingest_taxonomy(conn, secret)
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
-            reparse_affiliates(conn)
+            reparse_affiliates(conn, secret)
 
     dbt = dbtRunner()
     for cmd in (
         ["deps"],
         ["seed", "--target", target],
         ["run", "--target", target],
+        # 取り込みの抜け（タクソノミの新しい公表・相対年度の命名・項目名）を見つけるテスト。
+        # 落ちたら公開しない
+        [
+            "test",
+            "--target",
+            target,
+            "--select",
+            "xbrl_namespaces_have_taxonomy",
+            "stg_financial_facts_labels_present",
+            "stg_financial_facts_relative_year_known",
+        ],
         ["docs", "generate", "--target", target],
     ):
         result = dbt.invoke(cmd)
@@ -467,6 +479,18 @@ _XBRL_TABLES = (
 )
 
 
+def fetch_deadline(until: str | None, start: datetime) -> datetime | None:
+    """``HH:MM`` を、``start`` の後で最初に来るその時刻にする。
+
+    夜間だけ取得するとき（20 時に始めて 5 時に取得をやめる）に使う。取得をやめたあとに
+    dbt と公開が走るので、その時間を見込んだ時刻を渡す。
+    """
+    if not until:
+        return None
+    t = datetime.combine(start.date(), datetime.strptime(until, "%H:%M").time())
+    return t if t > start else t + timedelta(days=1)
+
+
 def ingest_xbrl(
     conn: duckdb.DuckDBPyConnection,
     client: EdinetClient,
@@ -499,7 +523,11 @@ def ingest_xbrl(
             rows.clear()
         docs.clear()
 
+    until = fetch_deadline(os.environ.get("EDINET_FETCH_UNTIL"), datetime.now())
     for i, doc_id in enumerate(doc_ids, 1):
+        if until is not None and datetime.now() >= until:
+            logger.info("  stop at %s (EDINET_FETCH_UNTIL), %d/%d docs", until, i - 1, total)
+            break
         if secret is not None:
             secret.refresh_if_due()
         now = datetime.now()
@@ -517,18 +545,31 @@ def ingest_xbrl(
     flush()
 
 
-def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
-    """保存済みの HTML から関係会社の表を全件作り直す（読み方を直したとき用）。"""
-    found = conn.execute(
-        f"SELECT doc_id, element_id, context_id, value FROM {XBRL_FACTS_TABLE} "
-        "WHERE element_id = ?",
-        [AFFILIATES_ELEMENT],
-    ).fetchall()
+def reparse_affiliates(conn: duckdb.DuckDBPyConnection, secret: Secret | None = None) -> None:
+    """保存済みの HTML から関係会社の表を全件作り直す（読み方を直したとき用）。
+
+    値の表は大きく、1 本のクエリで読むと認証情報の期限を越えるので、書類を束ごとに読み、
+    束の切れ目で認証情報を取り直す。
+    """
+    doc_ids = _fetched_doc_ids(conn, secret, "xbrl_fetch_progress")["doc_id"].to_pylist()
+    found: list[tuple] = []
+    for start in range(0, len(doc_ids), REPARSE_BATCH_DOCS):
+        if secret is not None:
+            secret.refresh_if_due()
+        conn.register("_docs", pa.table({"doc_id": doc_ids[start : start + REPARSE_BATCH_DOCS]}))
+        found += conn.execute(
+            f"SELECT f.doc_id, f.element_id, f.context_id, f.value FROM {XBRL_FACTS_TABLE} AS f "
+            "JOIN _docs USING (doc_id) WHERE f.element_id = ?",
+            [AFFILIATES_ELEMENT],
+        ).fetchall()
+        conn.unregister("_docs")
     rows = [
         row
         for doc_id, element_id, context_id, value in found
         for row in _affiliate_rows(doc_id, [{"element_id": element_id, "context_id": context_id, "value": value}])
     ]
+    if secret is not None:
+        secret.refresh_if_due()
     conn.execute("BEGIN")
     conn.execute(f"DELETE FROM {AFFILIATES_TABLE}")
     if rows:
@@ -539,22 +580,35 @@ def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
     logger.info("reparsed affiliated entities: %d rows from %d docs", len(rows), len(found))
 
 
-def ingest_taxonomy(conn: duckdb.DuckDBPyConnection) -> None:
+def ingest_taxonomy(conn: duckdb.DuckDBPyConnection, secret: Secret | None = None) -> None:
     """金融庁が公表したタクソノミのうち、まだ入れていない年版のラベルを入れる。
 
-    公表ページを読めないときは飛ばす（ラベルの抜けは dbt のテストが見つける）。
+    公表ページや ZIP を読めないときはその年版を飛ばし、次の実行で取り直す
+    （ラベルの抜けは dbt のテストが見つける）。
     """
+    if secret is not None:
+        secret.refresh_if_due()
     have = {r[0] for r in conn.execute(f"SELECT DISTINCT release FROM {TAXONOMY_LABELS_TABLE}").fetchall()}
     try:
-        releases = [(r, url) for r, url in taxonomy.list_releases() if r not in have]
+        releases = taxonomy.list_releases(skip=have)
     except OSError as e:
         logger.warning("taxonomy: release list unavailable (%s)", e)
         return
     for release, url in releases:
+        try:
+            labels = taxonomy.release_labels(taxonomy.fetch(url))
+        except (OSError, zipfile.BadZipFile) as e:
+            logger.warning("taxonomy %s: unavailable (%s)", release, e)
+            continue
         rows = [
             {"release": release, "namespace": ns, "file": f, "element_id": e, "role": r, "lang": lang, "label": text}
-            for ns, f, e, r, lang, text in taxonomy.release_labels(taxonomy.fetch(url))
+            for ns, f, e, r, lang, text in labels
         ]
+        if not rows:
+            logger.warning("taxonomy %s: no labels found in %s", release, url)
+        # ZIP の取得に時間がかかるので、書き込みの前に認証情報を取り直す
+        if secret is not None:
+            secret.refresh_if_due()
         conn.execute("BEGIN")
         conn.register("_batch", pa.Table.from_pylist(rows, schema=_TAXONOMY_LABELS_ARROW_SCHEMA))
         conn.execute(f"INSERT INTO {TAXONOMY_LABELS_TABLE} SELECT * FROM _batch")
@@ -640,7 +694,7 @@ def _docs_to_fetch(
 ) -> list[str]:
     """財務 CSV 未取得の対象書類 docID を提出日時の新しい順に返す（上限あり）。
 
-    対象は ``EDINET_FINANCIAL_DOC_TYPES``（既定 120=有報・160=半期報告書）かつ csvFlag=1 かつ未取下げ。
+    対象は ``EDINET_FINANCIAL_DOC_TYPES``（既定は空で取らない）かつ csvFlag=1 かつ未取下げ。
     ``financial_fetch_progress`` に登録済みの書類は除外する（空 CSV も status='empty'
     で登録済みなので再取得しない）。1 回の実行を ``EDINET_MAX_DOCS_PER_RUN`` 件に収める。
     """

@@ -8,16 +8,17 @@ with docs as (
     qualify row_number() over (partition by doc_id order by submit_datetime desc) = 1
 ),
 
--- 「〃」「同上」は直前の会社と同じ値なので、書類の中で前の行の値を写す
+-- 「〃」「同上」は直前の会社と同じ値なので、書類の中で前の行の値を写す。空のセルは空のまま
 filled as (
     select
         * replace (
             {% for col in ['address', 'capital', 'business', 'relationship'] -%}
-            coalesce(
-                case when trim({{ col }}) not in ('〃', '同上') then {{ col }} end,
-                last_value(case when trim({{ col }}) not in ('〃', '同上') then {{ col }} end ignore nulls)
-                    over (partition by doc_id order by row_seq rows between unbounded preceding and 1 preceding)
-            ) as {{ col }}{{ "," if not loop.last }}
+            case
+                when trim({{ col }}) in ('〃', '同上') then last_value(
+                    case when trim({{ col }}) not in ('〃', '同上') then {{ col }} end ignore nulls
+                ) over (partition by doc_id order by row_seq rows between unbounded preceding and 1 preceding)
+                else {{ col }}
+            end as {{ col }}{{ "," if not loop.last }}
             {% endfor %}
         )
     from {{ ref('raw_affiliated_entities') }}
