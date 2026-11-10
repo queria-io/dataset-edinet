@@ -270,7 +270,18 @@ def main() -> None:
     # 取り込みだけのときは dbt を流さない。push は前回のビルドの target/manifest.json
     # （compiled_code 入り）を使うので、コードを変えたら取り込みの前にビルドを流すこと
     if "build" in chosen:
+        # ビルドだけを流すときも、新しく公表されたタクソノミは先に入れる。
+        # 入れないと xbrl_namespaces_have_taxonomy が落ち続け、取り込みの側で入れるまで直らない
+        if "ingest" not in chosen:
+            refresh_taxonomy()
         run_dbt(DBT_BUILD, target)
+
+
+def refresh_taxonomy() -> None:
+    with _ducklake_connect() as (conn, secret):
+        conn.execute("CREATE SCHEMA IF NOT EXISTS edinet._source")
+        _ensure_xbrl_tables(conn)
+        ingest_taxonomy(conn, secret)
 
 
 def ingest() -> None:

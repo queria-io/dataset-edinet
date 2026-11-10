@@ -91,3 +91,15 @@ def test_steps():
     assert main.steps(["build", "ingest"]) == ["ingest", "build"]
     with pytest.raises(SystemExit):
         main.steps(["default"])
+
+
+def test_build_only_refreshes_taxonomy_first(monkeypatch):
+    calls = []
+    monkeypatch.setattr(main, "ingest", lambda: calls.append("ingest"))
+    monkeypatch.setattr(main, "refresh_taxonomy", lambda: calls.append("taxonomy"))
+    monkeypatch.setattr(main, "run_dbt", lambda *_: calls.append("dbt"))
+    for argv, expected in ((["build"], ["taxonomy", "dbt"]), ([], ["ingest", "dbt"])):
+        calls.clear()
+        monkeypatch.setattr(main.sys, "argv", ["main.py", *argv])
+        main.main()
+        assert calls == expected
