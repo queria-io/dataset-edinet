@@ -171,5 +171,5 @@ bash scripts/build.sh
 
 ```bash
 bash scripts/build.sh python main.py ingest   # 取り込みだけ（dbt は流さない）
-bash scripts/build.sh python main.py build    # dbt のビルドとテストだけ
+bash scripts/build.sh python main.py build    # 新しいタクソノミの取り込みと、dbt のビルドとテスト
 ```
