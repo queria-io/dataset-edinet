@@ -18,6 +18,16 @@ seeds:
   edinet:
     +database: edinet
     +schema: main
+    # doc_types: EDINET 書類種別コード（docTypeCode、3桁）と名称の対応表。
+    # 出典: EDINET API 仕様書 Version 2「4-1 参考資料 書類種別コード」
+    #
+    # context_relative_years: XBRL のコンテキスト ID の頭（最初の _ より前、EDINET の命名規約）と、
+    # type=5 の CSV の「相対年度」（当期・前期末・提出日時点など）の対応表。
+    # CurrentYearDuration〜Prior1InterimInstant の 15 行は、type=1 の書類と CSV を突き合わせて、
+    # すべての行で CSV と同じ値になることを確かめたもの。それ以降の行は、取り込み済みの CSV に現れる
+    # context の頭と「相対年度」の値をそのまま写したもの。
+    # CSV で相対年度が空の頭（RecordDateInstant など）は、空の値で入れる。
+    # 新しい頭が出てきたら stg_financial_facts_relative_year_known のテストが落ちるので、ここに 1 行足す。
 
 models:
   edinet:
