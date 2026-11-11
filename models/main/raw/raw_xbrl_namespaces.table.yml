@@ -1,7 +1,6 @@
 schema: main
 name: raw_xbrl_namespaces
 description: XBRL インスタンスの名前空間の接頭辞と URI。URI の日付で、書類が使ったタクソノミの年版が分かる
-published: false
 fields:
   - name: doc_id
     description: 書類管理番号
@@ -9,3 +8,6 @@ fields:
     description: 接頭辞（jppfs_cor など）
   - name: uri
     description: 名前空間の URI（http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2025-11-01/jppfs_cor など）
+annotations:
+  queria:
+    published: false

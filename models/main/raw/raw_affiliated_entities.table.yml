@@ -1,7 +1,6 @@
 schema: main
 name: raw_affiliated_entities
 description: 有価証券報告書の XBRL（書類取得 API type=1）の「関係会社の状況」の表を、1 社 1 行に分けたもの。値は記載のまま VARCHAR で保持し、型付けは mart で行う
-published: false
 fields:
   - name: doc_id
     description: 書類管理番号（documents と結合）
@@ -26,3 +25,6 @@ fields:
   - name: relationship
     description: |-
       関係内容の列の値。見出しが 2 段のときは「役員の兼任等: 有 / 営業上の取引等: …」とつなぐ
+annotations:
+  queria:
+    published: false

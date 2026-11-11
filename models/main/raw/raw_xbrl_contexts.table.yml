@@ -1,7 +1,6 @@
 schema: main
 name: raw_xbrl_contexts
 description: XBRL インスタンスの context。期間と、軸・メンバーの組
-published: false
 fields:
   - name: doc_id
     description: 書類管理番号
@@ -15,3 +14,6 @@ fields:
     description: 時点の日付
   - name: members
     description: 軸とメンバーの組の JSON（[[軸, メンバー], …]）
+annotations:
+  queria:
+    published: false

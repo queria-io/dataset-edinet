@@ -166,12 +166,14 @@ ORDER BY submit_date DESC;
 ```bash
 git submodule update --init
 uv sync
-bash scripts/build.sh
+FDL_TOKEN=... bash scripts/build.sh
 ```
 
-取り込みと dbt のビルドは、別々に実行して公開できます。ビルドやテストが失敗しても、先に公開した取り込みの分は残ります。取り込みだけの公開は前回のビルドの `target/manifest.json` を使うので、モデルを変えたあとは取り込みの前にビルドを流してください。
+`scripts/build.sh` は公開中のバージョンを `fdl checkout` してから取り込み・ビルドし、`fdl commit` と `fdl push` で公開します。手元で実行するときは、queria.io で発行したトークンを `FDL_TOKEN` に渡します。GitHub Actions では OIDC で取得します。
+
+取り込みと dbt のビルドは、別々に実行して公開できます。ビルドやテストが失敗しても、先に公開した取り込みの分は残ります。取り込みだけのときも、公開する記述にモデルの SQL を載せるために `dbt compile` は実行します。
 
 ```bash
-bash scripts/build.sh python main.py ingest   # 取り込みだけ（dbt は流さない）
+bash scripts/build.sh python main.py ingest   # 取り込みだけ（モデルは作り直さない）
 bash scripts/build.sh python main.py build    # 新しいタクソノミの取り込みと、dbt のビルドとテスト
 ```

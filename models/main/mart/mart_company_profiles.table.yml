@@ -7,7 +7,6 @@ description: |-
   - 表紙は有報の提出日時点の記載です。本店の移転や電話番号の変更は、各年の有報の行を並べて確認してください
   - 電話番号は記載のままの列と、数字だけにした列（`head_office_phone_digits`）があります
   - 代表者・事務連絡者の氏名は含みません
-published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
 fields:
@@ -22,7 +21,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    semantic: { role: entity, name: corporate_number }
+    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
   - name: filer_name
     title: 提出者名
   - name: period_end

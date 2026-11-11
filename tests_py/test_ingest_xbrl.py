@@ -70,7 +70,7 @@ def test_ingest_xbrl_and_reparse(monkeypatch):
     assert conn.execute(names).fetchall() == expected
     # DuckLake のファイル一覧の代わりに進捗表をそのまま読む
     monkeypatch.setattr(
-        main, "_fetched_doc_ids", lambda conn, secret, table: conn.execute(f"SELECT doc_id FROM edinet._source.{table}").fetch_arrow_table()
+        main, "_fetched_doc_ids", lambda conn, table: conn.execute(f"SELECT doc_id FROM edinet._source.{table}").fetch_arrow_table()
     )
     main.reparse_affiliates(conn)
     assert conn.execute(names).fetchall() == expected
@@ -156,7 +156,7 @@ def test_refetch_docs_without_zip(monkeypatch):
     monkeypatch.setattr(
         main,
         "_fetched_doc_ids",
-        lambda conn, secret, table, where="true": conn.execute(
+        lambda conn, table, where="true": conn.execute(
             f"SELECT doc_id FROM edinet._source.{table} WHERE {where}"
         ).to_arrow_table(),
     )

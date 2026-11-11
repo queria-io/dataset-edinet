@@ -3,26 +3,11 @@ name = "dataset-edinet"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
-    "queria>=0.22.0",
     "dbt-core>=1.11.2",
     "dbt-duckdb>=1.10.0",
     "pyarrow",
     "fdl-cli>=0.19.0",
 ]
-
-[tool.queria]
-name = "edinet"
-title = "EDINET 書類一覧"
-description = "金融庁 EDINET の開示書類一覧（有価証券報告書・四半期報告書・大量保有報告書等のメタデータ）と、提出者の企業マスタ（業種・市場区分・資本金・決算日等）・ファンドマスタ（投資信託等）。提出者法人番号付きで houjin_bangou / gbizinfo と結合できる。"
-cover = "📑"
-tags = ["EDINET", "有価証券報告書", "開示", "企業", "法人番号", "企業マスタ", "投資信託"]
-license = "金融庁 EDINET 利用規約"
-license_url = "https://disclosure2.edinet-fsa.go.jp/"
-repository_url = "https://github.com/queria-io/dataset-edinet"
-schedule = "daily"
-
-[tool.queria.schemas.main]
-title = "EDINET 書類一覧"
 
 [dependency-groups]
 dev = ["pytest"]

@@ -1,4 +1,6 @@
-spec_version: "0.1"
+# この dataset.yml は fdl commit が読む（FDL の dataset.json を YAML で書いたもの）。
+# 表の説明は models/ の *.table.yml に書く。表と列の型・NULL・行数は fdl commit がカタログから埋める。
+# Queria だけの項目（テーマ・カバー・AI 向けの説明・列の意味）は annotations.queria に書く。
 name: edinet
 title: EDINET 開示データ
 description: |-
@@ -29,8 +31,6 @@ keywords:
   - 研究開発費
 homepage: https://github.com/queria-io/dataset-edinet
 language: ja
-themes: [economy]
-
 licenses:
   - JP-FSA-EDINET
 
@@ -46,56 +46,57 @@ contributors:
 temporal_coverage: { start: "2016-06-23", end: null }
 spatial_coverage: [JP]
 update_frequency: daily
-cover: 📑
-
-ai_context:
-  instructions: |
-    企業の開示書類を探す、決算の主要指標を企業横断で比べる、提出のタイミングを調べる、
-    といった用途に使う。
-    mart_documents は書類のメタデータ（91万件・2016年6月以降）で、本文 PDF は含まない。
-    mart_business_results は有価証券報告書の主要経営指標（7万件・4441社・FY2019以降）で、
-    会計基準の違いを吸収した正規化テーブル。mart_human_capital は同じ有報の従業員数・
-    平均年齢・平均勤続年数・平均年間給与・女性管理職比率・男女の賃金の差異・男性の育児休業
-    取得率・女性役員を1書類1行にしたもの（女性活躍・育児休業の指標は2024年提出分から、平均年間給与などは2019年提出分から）。
-    mart_affiliated_entities は同じ有報の「関係会社の状況」を1社1行にしたもの（親会社・
-    連結子会社・持分法適用関連会社など）。有報に載る主要な関係会社だけで全子会社ではなく、
-    関係会社の法人番号は無い。親会社・その他の関係会社の行の議決権は被所有割合
-    （voting_rights_held_by_affiliate）。
-    mart_company_profiles は同じ有報の表紙（会社名・英訳名・本店の所在の場所・電話番号・
-    最寄りの連絡場所）と連結子会社の数・研究開発費を1書類1行にしたもの。電話番号で会社を
-    探すときは数字だけにした head_office_phone_digits を使う。
-    1社に提出年度の数だけ行があるので、最新だけ見るときは edinet_code ごとに period_end の
-    新しい行に絞る。stg_financial_facts はその元になる
-    要素ID×コンテキストの縦持ちで、生に忠実な代わりに解釈が要る。
-    stg_financial_facts は有価証券報告書（doc_type_code=120）と半期報告書（160）を持つ。
-    半期報告書の値は中間期のものなので、年度の値と混ぜるときは doc_type_code で分ける。
-    半期報告書の period_end は中間期末ではなく事業年度末なので、period_end だけで年度の値と見なさない。
-    値の期間は context_start・context_end（コンテキストの日付）で確認できる。decimals が -6 の値は
-    百万円単位で丸めたもの。会社独自の要素の item_name は提出書類のラベルから付けている。
-    四半期報告書は未対応。提出時点の本体だけを
-    取り込んでおり、訂正報告書による訂正は反映していない。過去分は段階的に充填中なので、
-    古い年度ほど欠けがある。
-    EDINET の閲覧可能期間は書類種別ごとに最長10年で、それを過ぎると API から取得できない。
-    つまり収録の下限は制度上の縦覧期間で決まっていて、企業の歴史を遡れるものではない。
-    取下げ書類（is_withdrawn）と不開示（disclosure_status）が混ざるので、集計時は除く。
-    edinet_code は提出者、sec_code は上場会社のみ（末尾0付き5桁）、
-    corporate_number（13桁）で houjin_bangou / gbizinfo / p_portal と結合できる。
-    本店の市区町村コード（lg_code）は houjin_bangou.main.mart_houjin_bangou と corporate_number で
-    結合すると取れる（上場会社はほぼ全社）。mart_companies.address は市区町村名から始まり
-    都道府県名を含まないので、住所文字列から地域を割り出さない。
-    ファンド（mart_funds）は企業とは別の主体なので、企業数を数えるときに混ぜない。
-  synonyms: [EDINET, 有価証券報告書, 有報, 開示書類, XBRL, 決算, 人的資本, 平均年収, 平均年間給与, 男女の賃金の差異, 女性管理職比率]
-  examples:
-    - ある企業の有価証券報告書の提出履歴を見たい
-    - 業種別に売上高や自己資本比率を比べたい
-    - 大量保有報告書の提出が多い企業を調べたい
-    - 業種別に平均年間給与や男女の賃金の差異を比べたい
-    - 女性管理職比率や男性の育児休業取得率が高い企業を探したい
-    - ある市区町村に本店がある上場企業と、その従業員数や平均年間給与を見たい
-    - ある企業の連結子会社と親会社を一覧したい
-    - 電話番号から上場企業を特定したい
-    - 研究開発費の多い企業を業種別に見たい
-
 schemas:
   - name: main
     title: EDINET 開示データ
+annotations:
+  queria:
+    themes: [economy]
+    cover: 📑
+    ai_context:
+      instructions: |
+        企業の開示書類を探す、決算の主要指標を企業横断で比べる、提出のタイミングを調べる、
+        といった用途に使う。
+        mart_documents は書類のメタデータ（91万件・2016年6月以降）で、本文 PDF は含まない。
+        mart_business_results は有価証券報告書の主要経営指標（7万件・4441社・FY2019以降）で、
+        会計基準の違いを吸収した正規化テーブル。mart_human_capital は同じ有報の従業員数・
+        平均年齢・平均勤続年数・平均年間給与・女性管理職比率・男女の賃金の差異・男性の育児休業
+        取得率・女性役員を1書類1行にしたもの（女性活躍・育児休業の指標は2024年提出分から、平均年間給与などは2019年提出分から）。
+        mart_affiliated_entities は同じ有報の「関係会社の状況」を1社1行にしたもの（親会社・
+        連結子会社・持分法適用関連会社など）。有報に載る主要な関係会社だけで全子会社ではなく、
+        関係会社の法人番号は無い。親会社・その他の関係会社の行の議決権は被所有割合
+        （voting_rights_held_by_affiliate）。
+        mart_company_profiles は同じ有報の表紙（会社名・英訳名・本店の所在の場所・電話番号・
+        最寄りの連絡場所）と連結子会社の数・研究開発費を1書類1行にしたもの。電話番号で会社を
+        探すときは数字だけにした head_office_phone_digits を使う。
+        1社に提出年度の数だけ行があるので、最新だけ見るときは edinet_code ごとに period_end の
+        新しい行に絞る。stg_financial_facts はその元になる
+        要素ID×コンテキストの縦持ちで、生に忠実な代わりに解釈が要る。
+        stg_financial_facts は有価証券報告書（doc_type_code=120）と半期報告書（160）を持つ。
+        半期報告書の値は中間期のものなので、年度の値と混ぜるときは doc_type_code で分ける。
+        半期報告書の period_end は中間期末ではなく事業年度末なので、period_end だけで年度の値と見なさない。
+        値の期間は context_start・context_end（コンテキストの日付）で確認できる。decimals が -6 の値は
+        百万円単位で丸めたもの。会社独自の要素の item_name は提出書類のラベルから付けている。
+        四半期報告書は未対応。提出時点の本体だけを
+        取り込んでおり、訂正報告書による訂正は反映していない。過去分は段階的に充填中なので、
+        古い年度ほど欠けがある。
+        EDINET の閲覧可能期間は書類種別ごとに最長10年で、それを過ぎると API から取得できない。
+        つまり収録の下限は制度上の縦覧期間で決まっていて、企業の歴史を遡れるものではない。
+        取下げ書類（is_withdrawn）と不開示（disclosure_status）が混ざるので、集計時は除く。
+        edinet_code は提出者、sec_code は上場会社のみ（末尾0付き5桁）、
+        corporate_number（13桁）で houjin_bangou / gbizinfo / p_portal と結合できる。
+        本店の市区町村コード（lg_code）は houjin_bangou.main.mart_houjin_bangou と corporate_number で
+        結合すると取れる（上場会社はほぼ全社）。mart_companies.address は市区町村名から始まり
+        都道府県名を含まないので、住所文字列から地域を割り出さない。
+        ファンド（mart_funds）は企業とは別の主体なので、企業数を数えるときに混ぜない。
+      synonyms: [EDINET, 有価証券報告書, 有報, 開示書類, XBRL, 決算, 人的資本, 平均年収, 平均年間給与, 男女の賃金の差異, 女性管理職比率]
+      examples:
+        - ある企業の有価証券報告書の提出履歴を見たい
+        - 業種別に売上高や自己資本比率を比べたい
+        - 大量保有報告書の提出が多い企業を調べたい
+        - 業種別に平均年間給与や男女の賃金の差異を比べたい
+        - 女性管理職比率や男性の育児休業取得率が高い企業を探したい
+        - ある市区町村に本店がある上場企業と、その従業員数や平均年間給与を見たい
+        - ある企業の連結子会社と親会社を一覧したい
+        - 電話番号から上場企業を特定したい
+        - 研究開発費の多い企業を業種別に見たい

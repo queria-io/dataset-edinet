@@ -1,8 +1,8 @@
 """EDINET 書類一覧 API 取得 + dbt build パイプライン。
 
 書類一覧 API (documents.json) を日付単位で走査し、提出書類のメタデータを
-queria の DuckLake カタログ (QUERIA_* 環境変数で注入) の ``_source.documents`` に
-書き込んでから dbt で変換する。R2 への公開は queria sync の push が担う。
+fdl checkout の作業場の DuckLake カタログ (FDL_WORKING) の ``_source.documents`` に
+書き込んでから dbt で変換する。公開は fdl commit / fdl push が担う (scripts/build.sh)。
 
 差分更新:
 - 未取得日のみ取得する（進捗を ``_source.fetch_progress`` に日単位で永続化し、
@@ -28,7 +28,6 @@ import duckdb
 import pyarrow as pa
 from dbt.cli.main import dbtRunner
 
-from queria import Secret
 
 from edinet import affiliates, taxonomy, xbrl
 from edinet.xbrl_facts import parse_instance, parse_labels
@@ -183,7 +182,7 @@ RECENT_REFETCH_DAYS = 7
 # 1 回の実行で取得する日数の上限。全期間バックフィル（約 3,800 日）を 1 回で
 # 走らせると CI のジョブ上限を超え、push 前に打ち切られて永続化できない。
 # 1 回あたりを上限内に収め、毎回 build + push まで完走させる。進捗は
-# fetch_progress に永続化され、queria pull で次回取り込まれるため、日次 cron で
+# fetch_progress に永続化され、次回の fdl checkout で取り込まれるため、日次 cron で
 # 数日かけて履歴が埋まる。未取得分は新しい日付から順に取得する。
 DEFAULT_MAX_DATES_PER_RUN = 1000
 
@@ -200,24 +199,24 @@ DEFAULT_MAX_XBRL_DOCS_PER_RUN = 1000
 # 何書類分をまとめて 1 トランザクションでコミットするか。1 書類ごとの COMMIT を
 # 避け DuckLake のスナップショット/Parquet ファイル数を抑える。
 FINANCIAL_BATCH_SIZE = 50
-# 進捗表を読むときに 1 文で読むデータファイルの本数。1 文が認証情報の期限
-# （最短 15 分）に収まる大きさにする。
+# 進捗表を読むときに 1 文で読むデータファイルの本数
 PROGRESS_READ_BATCH_FILES = 500
 # 関係会社を作り直すときに 1 文で読む書類の数
 REPARSE_BATCH_DOCS = 5000
 
 
 @contextmanager
-def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | None]]:
-    """queria 管理の DuckLake をアタッチした新規 DuckDB セッションを開く。
+def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
+    """fdl checkout の作業場の DuckLake をアタッチした新規 DuckDB セッションを開く。
 
-    ``queria run`` が注入する ``QUERIA_*`` 環境変数（SQLite ライブカタログ
-    ``QUERIA_CATALOG_PATH`` とデータ位置 ``QUERIA_DATA_URL``）を使う。カタログが
-    存在しない初回アタッチ時には作成される。
+    shared/scripts/build-fdl.sh が渡す環境変数（作業場のカタログ ``FDL_WORKING`` と
+    新しいデータファイルの置き場 ``FDL_DATA_PATH``）を使う。置き場が公開ストレージの
+    ``data/`` のときは、build-fdl.sh が鍵を取り直す DuckDB の永続 secret を作っているので、
+    この接続でも期限が切れるたびに取り直される。
     """
-    catalog_path = os.environ["QUERIA_CATALOG_PATH"]
-    data_url = os.environ["QUERIA_DATA_URL"]
-    # ビルドが公開ストレージを読むときの名乗り。queria run が queria-build として
+    catalog_path = os.environ["FDL_WORKING"]
+    data_url = os.environ["FDL_DATA_PATH"]
+    # ビルドが公開ストレージを読むときの名乗り。build-fdl.sh が queria-build として
     # 渡す。profiles.yml の config_options と同じ値を、こちらのセッションにも通す。
     # このデータセットは取り込みを dbt ではなくこの接続で行うので、ここが抜けると
     # 読み書きの大半が匿名のまま出ていき、data.queria.io の利用統計に自分のビルドが
@@ -229,27 +228,18 @@ def _ducklake_connect() -> Generator[tuple[duckdb.DuckDBPyConnection, Secret | N
     try:
         conn.execute("INSTALL ducklake; LOAD ducklake;")
         conn.execute("INSTALL sqlite; LOAD sqlite;")
-        secret: Secret | None = None
-        if Secret.needed():
-            conn.execute("INSTALL httpfs; LOAD httpfs;")
-            # credential_chain はこの拡張にある
-            conn.execute("INSTALL aws; LOAD aws;")
-            # profiles.yml と同じ。既定の 30 秒だと、大きなテーブルの読み込みが途中で切れる
-            conn.execute("SET http_timeout = 300; SET http_retries = 5;")
-            # 認証情報は値として持たず、取り直せる形で持つ。鍵はどこにも置かれない。
-            # **作っただけでは足りない** — DuckDB は期限を見て取り直さないので、
-            # このビルドの長さだと途中で読み書きできなくなる。取り直しは呼ぶ側の
-            # 責任で、書き込みループの切れ目では refresh_if_due()、1 時間近くかかる
-            # 単発のクエリの前では refresh() を呼ぶこと
-            secret = Secret(conn)
-            secret.install()
+        conn.execute("INSTALL httpfs; LOAD httpfs;")
+        # 永続 secret の credential_chain はこの拡張にある
+        conn.execute("INSTALL aws; LOAD aws;")
+        # profiles.yml と同じ。既定の 30 秒だと、大きなテーブルの読み込みが途中で切れる
+        conn.execute("SET http_timeout = 300; SET http_retries = 5;")
         conn.execute(
             f"ATTACH 'ducklake:{catalog_path}' AS edinet "
             f"(DATA_PATH '{data_url}', OVERRIDE_DATA_PATH true, "
             f"DATA_INLINING_ROW_LIMIT 0, META_TYPE 'sqlite', "
             f"META_JOURNAL_MODE 'WAL', BUSY_TIMEOUT 5000)"
         )
-        yield conn, secret
+        yield conn
     finally:
         conn.close()
 
@@ -274,8 +264,11 @@ def main() -> None:
     chosen = steps(sys.argv[1:])
     if "ingest" in chosen:
         ingest()
-    # 取り込みだけのときは dbt を流さない。push は前回のビルドの target/manifest.json
-    # （compiled_code 入り）を使うので、コードを変えたら取り込みの前にビルドを流すこと
+    # 取り込みだけのときはモデルを作り直さず、SQL のコンパイルだけを流す。fdl commit に渡す
+    # 記述のテーブルの SQL は target/manifest.json の compiled_code から足す
+    # (shared/scripts/dbt_lineage.py) ので、無いとそのバージョンから SQL と依存先が消える
+    if "build" not in chosen:
+        run_dbt((("compile",),), target)
     if "build" in chosen:
         # ビルドだけを流すときも、新しく公表されたタクソノミは先に入れる。
         # 入れないと xbrl_namespaces_have_taxonomy が落ち続け、取り込みの側で入れるまで直らない
@@ -285,10 +278,10 @@ def main() -> None:
 
 
 def refresh_taxonomy() -> None:
-    with _ducklake_connect() as (conn, secret):
+    with _ducklake_connect() as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS edinet._source")
         _ensure_xbrl_tables(conn)
-        ingest_taxonomy(conn, secret)
+        ingest_taxonomy(conn)
 
 
 def ingest() -> None:
@@ -300,7 +293,7 @@ def ingest() -> None:
     end = date.today()
 
     client = EdinetClient(api_key, rate_limit_seconds=rate)
-    with _ducklake_connect() as (conn, secret):
+    with _ducklake_connect() as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS edinet._source")
         _ensure_tables(conn)
         _ensure_xbrl_tables(conn)
@@ -309,18 +302,18 @@ def ingest() -> None:
         ingest_documents(conn, client, targets)
         ingest_companies(conn)
         ingest_funds(conn)
-        doc_ids = _docs_to_fetch(conn, secret)
+        doc_ids = _docs_to_fetch(conn)
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
-        ingest_financial_facts(conn, client, doc_ids, secret)
+        ingest_financial_facts(conn, client, doc_ids)
         folder = xbrl_dir()
         if folder is not None:
             drop_pushed_zips(conn, folder)
-        xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret, keep_zips=folder is not None)
+        xbrl_doc_ids = _xbrl_docs_to_fetch(conn, keep_zips=folder is not None)
         logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
-        ingest_xbrl(conn, client, xbrl_doc_ids, secret, folder)
-        ingest_taxonomy(conn, secret)
+        ingest_xbrl(conn, client, xbrl_doc_ids, folder)
+        ingest_taxonomy(conn)
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
-            reparse_affiliates(conn, secret)
+            reparse_affiliates(conn)
 
 
 DBT_BUILD: tuple[tuple[str, ...], ...] = (
@@ -380,7 +373,6 @@ def ingest_financial_facts(
     conn: duckdb.DuckDBPyConnection,
     client: EdinetClient,
     doc_ids: list[str],
-    secret: Secret | None = None,
 ) -> None:
     """対象書類の財務 CSV を取得し、バッチ単位で upsert + 進捗永続化する。
 
@@ -388,8 +380,7 @@ def ingest_financial_facts(
     する（1 書類ごとの COMMIT を避け DuckLake のスナップショット/ファイル数を抑える）。
     CSV の無い書類は status='empty' を記録し、次回以降の再取得対象から外す。
 
-    **ここが一番長い。** 1000 書類で 1 時間を超え、認証情報より長生きする。
-    書類の切れ目 (トランザクションの外) で ``secret`` を取り直す。
+    **ここが一番長い。** 1000 書類で 1 時間を超える。
     """
     total = len(doc_ids)
     batch_rows: list[dict] = []
@@ -431,8 +422,6 @@ def ingest_financial_facts(
 
     for i, doc_id in enumerate(doc_ids, 1):
         # トランザクションの外。間隔が来るまで何もしないので毎回呼んでよい
-        if secret is not None:
-            secret.refresh_if_due()
         rows = client.get_document_csv(doc_id)
         now = datetime.now()
         for csv_type, row_seq, values in rows:
@@ -586,7 +575,6 @@ def ingest_xbrl(
     conn: duckdb.DuckDBPyConnection,
     client: EdinetClient,
     doc_ids: list[str],
-    secret: Secret | None = None,
     folder: Path | None = None,
 ) -> None:
     """XBRL 本体 (type=1) を取り、値・context・会社のラベルと関係会社の表を入れる。
@@ -622,8 +610,6 @@ def ingest_xbrl(
         if until is not None and datetime.now() >= until:
             logger.info("  stop at %s (EDINET_FETCH_UNTIL), %d/%d docs", until, i - 1, total)
             break
-        if secret is not None:
-            secret.refresh_if_due()
         now = datetime.now()
         raw = client.get_document_xbrl(doc_id)
         read = _read_xbrl(doc_id, raw, now)
@@ -641,17 +627,14 @@ def ingest_xbrl(
     flush()
 
 
-def reparse_affiliates(conn: duckdb.DuckDBPyConnection, secret: Secret | None = None) -> None:
+def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
     """保存済みの HTML から関係会社の表を全件作り直す（読み方を直したとき用）。
 
-    値の表は大きく、1 本のクエリで読むと認証情報の期限を越えるので、書類を束ごとに読み、
-    束の切れ目で認証情報を取り直す。
+    値の表は大きいので、書類を束ごとに読む。
     """
-    doc_ids = _fetched_doc_ids(conn, secret, "xbrl_fetch_progress")["doc_id"].to_pylist()
+    doc_ids = _fetched_doc_ids(conn, "xbrl_fetch_progress")["doc_id"].to_pylist()
     found: list[tuple] = []
     for start in range(0, len(doc_ids), REPARSE_BATCH_DOCS):
-        if secret is not None:
-            secret.refresh_if_due()
         conn.register("_docs", pa.table({"doc_id": doc_ids[start : start + REPARSE_BATCH_DOCS]}))
         found += conn.execute(
             f"SELECT f.doc_id, f.element_id, f.context_id, f.value FROM {XBRL_FACTS_TABLE} AS f "
@@ -664,8 +647,6 @@ def reparse_affiliates(conn: duckdb.DuckDBPyConnection, secret: Secret | None = 
         for doc_id, element_id, context_id, value in found
         for row in _affiliate_rows(doc_id, [{"element_id": element_id, "context_id": context_id, "value": value}])
     ]
-    if secret is not None:
-        secret.refresh_if_due()
     conn.execute("BEGIN")
     conn.execute(f"DELETE FROM {AFFILIATES_TABLE}")
     if rows:
@@ -676,14 +657,12 @@ def reparse_affiliates(conn: duckdb.DuckDBPyConnection, secret: Secret | None = 
     logger.info("reparsed affiliated entities: %d rows from %d docs", len(rows), len(found))
 
 
-def ingest_taxonomy(conn: duckdb.DuckDBPyConnection, secret: Secret | None = None) -> None:
+def ingest_taxonomy(conn: duckdb.DuckDBPyConnection) -> None:
     """金融庁が公表したタクソノミのうち、まだ入れていない年版のラベルを入れる。
 
     公表ページや ZIP を読めないときはその年版を飛ばし、次の実行で取り直す
     （ラベルの抜けは dbt のテストが見つける）。
     """
-    if secret is not None:
-        secret.refresh_if_due()
     have = {r[0] for r in conn.execute(f"SELECT DISTINCT release FROM {TAXONOMY_LABELS_TABLE}").fetchall()}
     try:
         releases = taxonomy.list_releases(skip=have)
@@ -702,9 +681,6 @@ def ingest_taxonomy(conn: duckdb.DuckDBPyConnection, secret: Secret | None = Non
         ]
         if not rows:
             logger.warning("taxonomy %s: no labels found in %s", release, url)
-        # ZIP の取得に時間がかかるので、書き込みの前に認証情報を取り直す
-        if secret is not None:
-            secret.refresh_if_due()
         conn.execute("BEGIN")
         conn.register("_batch", pa.Table.from_pylist(rows, schema=_TAXONOMY_LABELS_ARROW_SCHEMA))
         conn.execute(f"INSERT INTO {TAXONOMY_LABELS_TABLE} SELECT * FROM _batch")
@@ -714,7 +690,7 @@ def ingest_taxonomy(conn: duckdb.DuckDBPyConnection, secret: Secret | None = Non
 
 
 def _xbrl_docs_to_fetch(
-    conn: duckdb.DuckDBPyConnection, secret: Secret | None = None, keep_zips: bool = False
+    conn: duckdb.DuckDBPyConnection, keep_zips: bool = False
 ) -> list[str]:
     """XBRL を未取得の書類を、提出日時の新しい順に返す（上限あり）。
 
@@ -733,9 +709,7 @@ def _xbrl_docs_to_fetch(
         os.environ.get("EDINET_MAX_XBRL_DOCS_PER_RUN", str(DEFAULT_MAX_XBRL_DOCS_PER_RUN))
     )
     ph = ", ".join("?" for _ in doc_types)
-    conn.register("_fetched", _fetched_doc_ids(conn, secret, "xbrl_fetch_progress"))
-    if secret is not None:
-        secret.refresh_if_due()
+    conn.register("_fetched", _fetched_doc_ids(conn, "xbrl_fetch_progress"))
     rows = conn.execute(
         f"""
         SELECT d."docID"
@@ -755,9 +729,7 @@ def _xbrl_docs_to_fetch(
     docs = [r[0] for r in rows]
     if not keep_zips or len(docs) >= cap:
         return docs
-    conn.register("_done", _fetched_doc_ids(conn, secret, "xbrl_fetch_progress", "status = 'done'"))
-    if secret is not None:
-        secret.refresh_if_due()
+    conn.register("_done", _fetched_doc_ids(conn, "xbrl_fetch_progress", "status = 'done'"))
     again = conn.execute(
         f"""
         SELECT d."docID"
@@ -776,16 +748,13 @@ def _xbrl_docs_to_fetch(
 
 def _fetched_doc_ids(
     conn: duckdb.DuckDBPyConnection,
-    secret: Secret | None = None,
     table: str = "financial_fetch_progress",
     where: str = "true",
 ) -> pa.Table:
     """進捗表に登録済みの doc_id を、データファイルを束ごとに読んで返す。
 
     進捗表は小さなファイルが数万本に分かれていて、1 本のクエリで全件読むと
-    1 時間を超える。1 本の文が認証情報の期限を越えると取り直しようがない
-    （2026-10-07〜10-10 の 4 連続失敗はちょうど 1 時間で 403 になった）ので、
-    束の切れ目で ``refresh_if_due()`` を呼ぶ。
+    1 時間を超えるので、束ごとに読む。
 
     削除ファイルは見ない。この表の DELETE は同じトランザクションで同じ doc_id を
     入れ直すときだけなので、データファイルの doc_id の和集合が表の doc_id と一致する。
@@ -800,8 +769,6 @@ def _fetched_doc_ids(
     logger.info("%s: %d files", table, len(files))
     seen: set[str] = set()
     for start in range(0, len(files), PROGRESS_READ_BATCH_FILES):
-        if secret is not None:
-            secret.refresh_if_due()
         batch = files[start : start + PROGRESS_READ_BATCH_FILES]
         rows = conn.execute(
             f"SELECT DISTINCT doc_id FROM read_parquet(?) WHERE {where}", [batch]
@@ -811,7 +778,7 @@ def _fetched_doc_ids(
 
 
 def _docs_to_fetch(
-    conn: duckdb.DuckDBPyConnection, secret: Secret | None = None
+    conn: duckdb.DuckDBPyConnection
 ) -> list[str]:
     """財務 CSV 未取得の対象書類 docID を提出日時の新しい順に返す（上限あり）。
 
@@ -830,9 +797,7 @@ def _docs_to_fetch(
         return []
     cap = int(os.environ.get("EDINET_MAX_DOCS_PER_RUN", str(DEFAULT_MAX_DOCS_PER_RUN)))
     ph = ", ".join("?" for _ in doc_types)
-    conn.register("_fetched", _fetched_doc_ids(conn, secret))
-    if secret is not None:
-        secret.refresh_if_due()
+    conn.register("_fetched", _fetched_doc_ids(conn))
     rows = conn.execute(
         f"""
         SELECT d."docID"

@@ -6,7 +6,6 @@ description: |-
 
   - 連結の値があれば連結、無ければ個別の値です
   - IFRS 採用企業の値（RevenueIFRS など）は JP GAAP の列に統合しています
-published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
 fields:
@@ -18,7 +17,7 @@ fields:
     title: 提出者証券コード
   - name: corporate_number
     title: 提出者法人番号
-    semantic: { role: entity, name: corporate_number }
+    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
   - name: filer_name
     title: 提出者名
   - name: period_end
