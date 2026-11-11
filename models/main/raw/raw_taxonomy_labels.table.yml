@@ -1,7 +1,6 @@
 schema: main
 name: raw_taxonomy_labels
 description: 金融庁が公表した EDINET タクソノミの年版ごとのラベル
-published: false
 fields:
   - name: release
     description: 公表ページの日付（20251111 など）。年版の途中の改訂も別の値になる
@@ -17,3 +16,6 @@ fields:
     description: 言語（ja / en）
   - name: label
     description: ラベル
+annotations:
+  queria:
+    published: false

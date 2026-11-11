@@ -161,7 +161,6 @@ dependencies = [
     { name = "dbt-duckdb" },
     { name = "fdl-cli" },
     { name = "pyarrow" },
-    { name = "queria" },
 ]
 
 [package.dev-dependencies]
@@ -175,7 +174,6 @@ requires-dist = [
     { name = "dbt-duckdb", specifier = ">=1.10.0" },
     { name = "fdl-cli", specifier = ">=0.19.0" },
     { name = "pyarrow" },
-    { name = "queria", specifier = ">=0.22.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -878,20 +876,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
-]
-
-[[package]]
-name = "queria"
-version = "0.23.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "duckdb" },
-    { name = "jsonschema" },
-    { name = "pyyaml" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/34/ad8e075e2f1c22fafdbda2ddd85f8620a95df54d517a397f21c7ea08a9b6/queria-0.23.0.tar.gz", hash = "sha256:97acf4a9976eb620b118b8c471ce1bdbb21a3d653f86622392735944d9702265", size = 315952, upload-time = "2026-09-01T02:12:55.217Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6e/84/79c3e8095be63eaf6622342dd88c644ec19cb48d0f7a5c45df42ebac9d50/queria-0.23.0-py3-none-any.whl", hash = "sha256:271bdec151901c8bd03f8e2d3c02a43143dfda10b808136c2d33039e2bfaca45", size = 120169, upload-time = "2026-09-01T02:12:53.567Z" },
 ]
 
 [[package]]

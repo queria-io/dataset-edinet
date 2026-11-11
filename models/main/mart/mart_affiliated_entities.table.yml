@@ -7,7 +7,6 @@ description: |-
   - 有報に載っている会社だけです。大きな会社は主要な関係会社だけを載せていて、全子会社の一覧ではありません
   - 名称は有報の記載のままで、法人番号は付いていません
   - 値はその有報の提出日時点の記載です。推移は各年の有報の行を並べて確認してください
-published: true
 sources:
   - path: https://disclosure2.edinet-fsa.go.jp/
 fields:
@@ -22,7 +21,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 提出会社の法人番号（13桁）。関係会社の法人番号ではない
-    semantic: { role: entity, name: corporate_number }
+    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
   - name: filer_name
     title: 提出者名
   - name: period_end

@@ -1,7 +1,6 @@
 schema: main
 name: raw_xbrl_labels
 description: type=1 の ZIP の会社独自のラベル。会社独自の要素とメンバー（セグメントなど）の名前
-published: false
 fields:
   - name: doc_id
     description: 書類管理番号
@@ -13,3 +12,6 @@ fields:
     description: 言語（ja / en）
   - name: label
     description: ラベル
+annotations:
+  queria:
+    published: false

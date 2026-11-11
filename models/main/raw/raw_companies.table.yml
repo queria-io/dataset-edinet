@@ -1,7 +1,6 @@
 schema: main
 name: raw_companies
 description: EDINETコードリスト（EdinetcodeDlInfo.csv）の提出者マスタ。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
-published: false
 fields:
   - name: edinet_code
     description: EDINETコード（E+5桁）
@@ -31,3 +30,6 @@ fields:
     description: 提出者法人番号（13桁）
   - name: _fetched_at
     description: コードリスト取得時刻（取得時メタ）
+annotations:
+  queria:
+    published: false

@@ -1,7 +1,6 @@
 schema: main
 name: stg_taxonomy_item_names
 description: EDINET タクソノミの要素の項目名（冗長ラベル、無ければ標準ラベル）の引き当て表。stg_financial_facts の item_name に使う
-published: false
 fields:
   - name: namespace
     description: タクソノミのモジュールと日付（jppfs/2025-11-01 など）。'*' は名前空間によらない最も新しい年版のラベル
@@ -9,3 +8,6 @@ fields:
     description: 要素またはメンバーの ID
   - name: label
     description: 日本語の項目名
+annotations:
+  queria:
+    published: false
