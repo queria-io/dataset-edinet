@@ -159,6 +159,8 @@ ORDER BY submit_date DESC;
 
 財務データは、書類一覧で xbrlFlag=1 の有価証券報告書・半期報告書を、書類取得 API（type=1 の XBRL）から書類ごとに取得します。インスタンスの値・context と、会社独自の項目の名前（ZIP 内の `_lab.xml`）を書かれたまま入れ、相対年度・連結/個別・項目名は dbt で付けます。取得済みの書類は `_source.xbrl_fetch_progress` に記録します。1 回の実行の書類数の上限は `EDINET_MAX_XBRL_DOCS_PER_RUN`（既定 1000）、取得をやめる時刻は `EDINET_FETCH_UNTIL`（`05:00` の形。夜間だけ取得するとき）、対象の書類の種類は `EDINET_XBRL_DOC_TYPES`（既定 `120,160`）で変えられます。過去の書類は新しい提出日から順に取り直している途中で、まだのものは以前に取った type=5 の CSV の行を使います（`stg_financial_facts.source` が `csv`）。
 
+`EDINET_XBRL_DIR` にフォルダを渡すと、取得した type=1 の ZIP をそのフォルダに `<doc_id>.zip` で置き、SHA-256 とバイト数を `_source.xbrl_files`（`main.raw_xbrl_files`）に記録します。`raw_xbrl_files.sha256` はアセットの列なので、ビルドの `fdl commit --assets` に同じフォルダを渡すと、リポジトリに無い ZIP だけが `assets/<sha256>` に上がります。fdl でのビルドでは、公開中のバージョンが既に持つ ZIP を取り込みの最初に手元から消します。
+
 標準の要素の名前は、金融庁が年 1 回公表する EDINET タクソノミから取ります。公表ページ（https://www.fsa.go.jp/search/）からまだ入れていない年版を見つけて `_source.taxonomy_labels` に入れるので、新しい年版の追加に手作業は要りません。直近 1 年の書類に名前の付かない要素があると、dbt のテスト（`stg_financial_facts_labels_present`）が失敗します。
 
 ```bash

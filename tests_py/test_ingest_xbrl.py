@@ -103,3 +103,32 @@ def test_build_only_refreshes_taxonomy_first(monkeypatch):
         monkeypatch.setattr(main.sys, "argv", ["main.py", *argv])
         main.main()
         assert calls == expected
+
+
+def test_keep_zip_and_drop_pushed(tmp_path, monkeypatch):
+    import hashlib
+
+    conn = duckdb.connect()
+    conn.execute("ATTACH ':memory:' AS edinet")
+    conn.execute("CREATE SCHEMA edinet._source")
+    main._ensure_xbrl_tables(conn)
+    main.ingest_xbrl(conn, FakeClient(), ["S1", "S2"], folder=tmp_path)
+
+    raw = (tmp_path / "S1.zip").read_bytes()
+    assert not (tmp_path / "S2.zip").exists()
+    assert conn.execute(f"SELECT doc_id, sha256, bytes FROM {main.XBRL_FILES_TABLE}").fetchall() == [
+        ("S1", hashlib.sha256(raw).hexdigest(), len(raw))
+    ]
+
+    # fdl のビルドでなければ消さない
+    monkeypatch.delenv("FDL_WORKING", raising=False)
+    main.drop_pushed_zips(conn, tmp_path)
+    assert (tmp_path / "S1.zip").exists()
+    (tmp_path / "S3.zip").write_bytes(b"PK")
+    monkeypatch.setenv("FDL_WORKING", "work.sqlite")
+    main.drop_pushed_zips(conn, tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["S3.zip"]
+
+
+def test_no_folder_keeps_nothing():
+    assert main.keep_zip(None, "S1", b"PK", None) == []

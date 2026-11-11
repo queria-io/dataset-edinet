@@ -13,6 +13,7 @@ queria の DuckLake カタログ (QUERIA_* 環境変数で注入) の ``_source.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -21,6 +22,7 @@ import zipfile
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import duckdb
 import pyarrow as pa
@@ -55,6 +57,7 @@ XBRL_NAMESPACES_TABLE = "edinet._source.xbrl_namespaces"
 TAXONOMY_LABELS_TABLE = "edinet._source.taxonomy_labels"
 XBRL_PROGRESS_TABLE = "edinet._source.xbrl_fetch_progress"
 AFFILIATES_TABLE = "edinet._source.affiliated_entities"
+XBRL_FILES_TABLE = "edinet._source.xbrl_files"
 
 # 書類取得 API type=5 CSV の列順（要素ID〜値の固定 9 列）に対応する英語キー。
 # _source には全 VARCHAR で保持し、型付け・リネームは stg 層で行う。
@@ -161,6 +164,10 @@ _TAXONOMY_LABELS_ARROW_SCHEMA = pa.schema(
 )
 _XBRL_NAMESPACES_ARROW_SCHEMA = pa.schema(
     [("doc_id", pa.string()), ("prefix", pa.string()), ("uri", pa.string())]
+)
+
+_XBRL_FILES_ARROW_SCHEMA = pa.schema(
+    [("doc_id", pa.string()), ("sha256", pa.string()), ("bytes", pa.int64()), ("fetched_at", pa.timestamp("us"))]
 )
 
 _AFFILIATES_ARROW_SCHEMA = pa.schema(
@@ -307,7 +314,10 @@ def ingest() -> None:
         ingest_financial_facts(conn, client, doc_ids, secret)
         xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret)
         logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
-        ingest_xbrl(conn, client, xbrl_doc_ids, secret)
+        folder = xbrl_dir()
+        if folder is not None:
+            drop_pushed_zips(conn, folder)
+        ingest_xbrl(conn, client, xbrl_doc_ids, secret, folder)
         ingest_taxonomy(conn, secret)
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
             reparse_affiliates(conn, secret)
@@ -514,6 +524,7 @@ _XBRL_TABLES = (
     ("labels", XBRL_LABELS_TABLE, _XBRL_LABELS_ARROW_SCHEMA),
     ("namespaces", XBRL_NAMESPACES_TABLE, _XBRL_NAMESPACES_ARROW_SCHEMA),
     ("affiliates", AFFILIATES_TABLE, _AFFILIATES_ARROW_SCHEMA),
+    ("files", XBRL_FILES_TABLE, _XBRL_FILES_ARROW_SCHEMA),
     ("progress", XBRL_PROGRESS_TABLE, _FINANCIAL_PROGRESS_ARROW_SCHEMA),
 )
 
@@ -530,13 +541,57 @@ def fetch_deadline(until: str | None, start: datetime) -> datetime | None:
     return t if t > start else t + timedelta(days=1)
 
 
+def keep_zip(folder: Path | None, doc_id: str, raw: bytes | None, now: datetime) -> list[dict]:
+    """type=1 の ZIP を ``folder`` に ``<doc_id>.zip`` で置き、xbrl_files の行を返す。
+
+    置いた ZIP は fdl commit --assets がアセット (assets/<sha256>) として上げる。
+    ``folder`` が無いときは置かず、行も作らない（行が指すファイルが無いと push が通らない）。
+    """
+    if folder is None or raw is None:
+        return []
+    (folder / f"{doc_id}.zip").write_bytes(raw)
+    return [{"doc_id": doc_id, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw), "fetched_at": now}]
+
+
+def drop_pushed_zips(conn: duckdb.DuckDBPyConnection, folder: Path) -> None:
+    """公開済みのバージョンが既に持つ ZIP を手元から消す。
+
+    fdl のビルドは公開中のバージョンを checkout してから始まるので、その xbrl_files に
+    行がある書類の ZIP はアップロード済み。残すと fdl commit --assets がフォルダ全体の
+    sha256 を毎回計算し直す。fdl を使わないビルド（FDL_WORKING が無い）では、
+    ZIP はどこにも上がっていないので消さない。
+    """
+    if not os.environ.get("FDL_WORKING"):
+        return
+    pushed = {
+        doc_id
+        for (doc_id,) in conn.execute(f"SELECT DISTINCT doc_id FROM {XBRL_FILES_TABLE}").fetchall()
+    }
+    for path in folder.glob("*.zip"):
+        if path.stem in pushed:
+            path.unlink()
+
+
+def xbrl_dir() -> Path | None:
+    """ZIP を置くフォルダ (EDINET_XBRL_DIR)。無ければ作る。未設定なら置かない。"""
+    value = os.environ.get("EDINET_XBRL_DIR")
+    if not value:
+        return None
+    folder = Path(value)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
 def ingest_xbrl(
     conn: duckdb.DuckDBPyConnection,
     client: EdinetClient,
     doc_ids: list[str],
     secret: Secret | None = None,
+    folder: Path | None = None,
 ) -> None:
     """XBRL 本体 (type=1) を取り、値・context・会社のラベルと関係会社の表を入れる。
+
+    ``folder`` を渡すと、ZIP をそこに置いて xbrl_files に記録する（``keep_zip``）。
 
     値はインスタンスに書かれたまま入れ、項目名や相対年度は dbt で付ける。
     テキストブロックの HTML も値として残すので、関係会社の読み方を直したときは
@@ -570,7 +625,9 @@ def ingest_xbrl(
         if secret is not None:
             secret.refresh_if_due()
         now = datetime.now()
-        read = _read_xbrl(doc_id, client.get_document_xbrl(doc_id), now)
+        raw = client.get_document_xbrl(doc_id)
+        read = _read_xbrl(doc_id, raw, now)
+        read["files"] = keep_zip(folder, doc_id, raw, now)
         for key, rows in read.items():
             batch[key].extend(rows)
         n = len(read["facts"])
@@ -840,6 +897,10 @@ def _ensure_xbrl_tables(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {XBRL_PROGRESS_TABLE} "
         "(doc_id VARCHAR, fetched_at TIMESTAMP, row_count INTEGER, status VARCHAR)"
+    )
+    conn.execute(
+        f"CREATE TABLE IF NOT EXISTS {XBRL_FILES_TABLE} "
+        "(doc_id VARCHAR, sha256 VARCHAR, bytes BIGINT, fetched_at TIMESTAMP)"
     )
     cols = ", ".join(f"{f} VARCHAR" for f in affiliates.FIELDS if f != "row_seq")
     conn.execute(
