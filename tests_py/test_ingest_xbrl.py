@@ -132,3 +132,36 @@ def test_keep_zip_and_drop_pushed(tmp_path, monkeypatch):
 
 def test_no_folder_keeps_nothing():
     assert main.keep_zip(None, "S1", b"PK", None) == []
+
+
+def test_refetch_docs_without_zip(monkeypatch):
+    conn = duckdb.connect()
+    conn.execute("ATTACH ':memory:' AS edinet")
+    conn.execute("CREATE SCHEMA edinet._source")
+    main._ensure_xbrl_tables(conn)
+    conn.execute(
+        f'CREATE TABLE {main.DOCUMENTS_TABLE} ("docID" VARCHAR, "docTypeCode" VARCHAR, '
+        '"xbrlFlag" VARCHAR, "withdrawalStatus" VARCHAR, "submitDateTime" VARCHAR)'
+    )
+    conn.execute(
+        f"INSERT INTO {main.DOCUMENTS_TABLE} VALUES "
+        "('NEW', '120', '1', '0', '2026-11-10'), ('OLD', '120', '1', '0', '2026-11-01'), "
+        "('KEPT', '120', '1', '0', '2026-11-05'), ('EMPTY', '120', '1', '0', '2026-11-06')"
+    )
+    conn.execute(
+        f"INSERT INTO {main.XBRL_PROGRESS_TABLE} VALUES "
+        "('OLD', now(), 1, 'done'), ('KEPT', now(), 1, 'done'), ('EMPTY', now(), 0, 'empty')"
+    )
+    conn.execute(f"INSERT INTO {main.XBRL_FILES_TABLE} VALUES ('KEPT', 'x', 1, now())")
+    monkeypatch.setattr(
+        main,
+        "_fetched_doc_ids",
+        lambda conn, secret, table, where="true": conn.execute(
+            f"SELECT doc_id FROM edinet._source.{table} WHERE {where}"
+        ).to_arrow_table(),
+    )
+    # 未取得の書類が先、ZIP を残していない取得済みの書類はその後
+    assert main._xbrl_docs_to_fetch(conn, keep_zips=True) == ["NEW", "OLD"]
+    assert main._xbrl_docs_to_fetch(conn) == ["NEW"]
+    monkeypatch.setenv("EDINET_MAX_XBRL_DOCS_PER_RUN", "1")
+    assert main._xbrl_docs_to_fetch(conn, keep_zips=True) == ["NEW"]

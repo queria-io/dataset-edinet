@@ -312,11 +312,11 @@ def ingest() -> None:
         doc_ids = _docs_to_fetch(conn, secret)
         logger.info("fetch financial CSV for %d docs", len(doc_ids))
         ingest_financial_facts(conn, client, doc_ids, secret)
-        xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret)
-        logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
         folder = xbrl_dir()
         if folder is not None:
             drop_pushed_zips(conn, folder)
+        xbrl_doc_ids = _xbrl_docs_to_fetch(conn, secret, keep_zips=folder is not None)
+        logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
         ingest_xbrl(conn, client, xbrl_doc_ids, secret, folder)
         ingest_taxonomy(conn, secret)
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
@@ -714,9 +714,14 @@ def ingest_taxonomy(conn: duckdb.DuckDBPyConnection, secret: Secret | None = Non
 
 
 def _xbrl_docs_to_fetch(
-    conn: duckdb.DuckDBPyConnection, secret: Secret | None = None
+    conn: duckdb.DuckDBPyConnection, secret: Secret | None = None, keep_zips: bool = False
 ) -> list[str]:
-    """XBRL を未取得の書類を、提出日時の新しい順に返す（上限あり）。"""
+    """XBRL を未取得の書類を、提出日時の新しい順に返す（上限あり）。
+
+    ``keep_zips`` のときは、未取得の書類が上限に届かなければ、取得済みで ZIP を
+    残していない書類（xbrl_files に行が無いもの）を新しい順に足す。ZIP を残す前に
+    取った書類の ZIP を、未取得の書類を取り終えてから取り直すため。
+    """
     doc_types = [
         t.strip()
         for t in os.environ.get("EDINET_XBRL_DOC_TYPES", DEFAULT_XBRL_DOC_TYPES).split(",")
@@ -747,13 +752,33 @@ def _xbrl_docs_to_fetch(
         doc_types,
     ).fetchall()
     conn.unregister("_fetched")
-    return [r[0] for r in rows]
+    docs = [r[0] for r in rows]
+    if not keep_zips or len(docs) >= cap:
+        return docs
+    conn.register("_done", _fetched_doc_ids(conn, secret, "xbrl_fetch_progress", "status = 'done'"))
+    if secret is not None:
+        secret.refresh_if_due()
+    again = conn.execute(
+        f"""
+        SELECT d."docID"
+        FROM {DOCUMENTS_TABLE} AS d
+        JOIN _done AS p ON d."docID" = p.doc_id
+        LEFT JOIN {XBRL_FILES_TABLE} AS f ON d."docID" = f.doc_id
+        WHERE f.doc_id IS NULL
+        GROUP BY d."docID"
+        ORDER BY max(d."submitDateTime") DESC
+        LIMIT {cap - len(docs)}
+        """
+    ).fetchall()
+    conn.unregister("_done")
+    return docs + [r[0] for r in again]
 
 
 def _fetched_doc_ids(
     conn: duckdb.DuckDBPyConnection,
     secret: Secret | None = None,
     table: str = "financial_fetch_progress",
+    where: str = "true",
 ) -> pa.Table:
     """進捗表に登録済みの doc_id を、データファイルを束ごとに読んで返す。
 
@@ -779,7 +804,7 @@ def _fetched_doc_ids(
             secret.refresh_if_due()
         batch = files[start : start + PROGRESS_READ_BATCH_FILES]
         rows = conn.execute(
-            "SELECT DISTINCT doc_id FROM read_parquet(?)", [batch]
+            f"SELECT DISTINCT doc_id FROM read_parquet(?) WHERE {where}", [batch]
         ).fetchall()
         seen.update(r[0] for r in rows)
     return pa.table({"doc_id": pa.array(sorted(seen), pa.string())})
