@@ -1,0 +1,20 @@
+schema: main
+name: raw_xbrl_files
+description: 書類取得 API (type=1) の ZIP の原本。1 行が 1 書類で、ZIP はアセットとして sha256 で指す
+published: false
+fields:
+  - name: doc_id
+    description: 書類管理番号
+  - name: sha256
+    description: ZIP の SHA-256（小文字の 16 進）。ZIP はリポジトリの assets/<sha256> にある
+    asset: true
+  - name: bytes
+    description: ZIP のバイト数
+  - name: media_type
+    description: ZIP のメディアタイプ（application/zip）
+  - name: file_name
+    description: ZIP のファイル名（<doc_id>.zip）
+  - name: source_url
+    description: 取得元の書類取得 API の URL（取得には EDINET の API キーが要る）
+  - name: fetched_at
+    description: 取得した日時
