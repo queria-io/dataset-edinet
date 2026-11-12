@@ -98,7 +98,8 @@ def test_build_only_refreshes_taxonomy_first(monkeypatch):
     monkeypatch.setattr(main, "ingest", lambda: calls.append("ingest"))
     monkeypatch.setattr(main, "refresh_taxonomy", lambda: calls.append("taxonomy"))
     monkeypatch.setattr(main, "run_dbt", lambda *_: calls.append("dbt"))
-    for argv, expected in ((["build"], ["taxonomy", "dbt"]), ([], ["ingest", "dbt"])):
+    monkeypatch.setattr(main, "forget_old_snapshots", lambda: calls.append("forget"))
+    for argv, expected in ((["build"], ["forget", "taxonomy", "dbt"]), ([], ["forget", "ingest", "dbt"])):
         calls.clear()
         monkeypatch.setattr(main.sys, "argv", ["main.py", *argv])
         main.main()
@@ -165,3 +166,17 @@ def test_refetch_docs_without_zip(monkeypatch):
     assert main._xbrl_docs_to_fetch(conn) == ["NEW"]
     monkeypatch.setenv("EDINET_MAX_XBRL_DOCS_PER_RUN", "1")
     assert main._xbrl_docs_to_fetch(conn, keep_zips=True) == ["NEW"]
+
+
+def test_forget_old_snapshots_keeps_files(monkeypatch, tmp_path):
+    monkeypatch.setenv("FDL_WORKING", str(tmp_path / "work.sqlite"))
+    monkeypatch.setenv("FDL_DATA_PATH", str(tmp_path / "data") + "/")
+    with main._ducklake_connect() as conn:
+        for i in range(3):
+            conn.execute("CREATE OR REPLACE TABLE edinet.t AS SELECT ? AS x", [i])
+    main.forget_old_snapshots()
+    with main._ducklake_connect() as conn:
+        snapshots = conn.execute("SELECT snapshot_id FROM ducklake_snapshots('edinet')").fetchall()
+        assert snapshots == [(3,)]
+        assert conn.execute("SELECT x FROM edinet.t").fetchall() == [(2,)]
+    assert len(list((tmp_path / "data" / "main" / "t").iterdir())) == 3

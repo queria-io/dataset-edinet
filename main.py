@@ -262,6 +262,7 @@ def steps(argv: list[str]) -> list[str]:
 def main() -> None:
     target = os.environ.get("DBT_TARGET", "default")
     chosen = steps(sys.argv[1:])
+    forget_old_snapshots()
     if "ingest" in chosen:
         ingest()
     # 取り込みだけのときはモデルを作り直さず、SQL のコンパイルだけを流す。fdl commit に渡す
@@ -275,6 +276,29 @@ def main() -> None:
         if "ingest" not in chosen:
             refresh_taxonomy()
         run_dbt(DBT_BUILD, target)
+
+
+def forget_old_snapshots() -> None:
+    """checkout したバージョンより前のスナップショットを作業場のカタログから外す。
+
+    Queria の日次の削除は、生きているバージョンが届くファイルを files.json（各バージョンの
+    スナップショット時点のファイル）で数えるので、古いスナップショットにしか残っていない
+    ファイルを消す。一方 fdl push は、カタログが名指しする全スナップショットのファイルが
+    リポジトリにあることを確かめるので、それが欠けると断られる。外すのはカタログの記録だけで、
+    ファイルは消さない（ducklake_cleanup_old_files は呼ばない）。親のスナップショットは残すので、
+    fdl commit の差分（diff）は作れる。
+    """
+    with _ducklake_connect() as conn:
+        (current,) = conn.execute("SELECT max(snapshot_id) FROM ducklake_snapshots('edinet')").fetchone()
+        old = [
+            r[0]
+            for r in conn.execute(
+                "SELECT snapshot_id FROM ducklake_snapshots('edinet') WHERE snapshot_id < ?", [current]
+            ).fetchall()
+        ]
+        if old:
+            conn.execute(f"CALL ducklake_expire_snapshots('edinet', versions => {old})")
+            logger.info("forgot %d snapshots before %d", len(old), current)
 
 
 def refresh_taxonomy() -> None:
