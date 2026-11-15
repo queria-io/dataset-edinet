@@ -26,7 +26,7 @@ with facts as (
         element_id,
         context_id,
         numeric_value
-    from {{ ref('stg_financial_facts') }}
+    from {{ ref('mart_financial_facts') }}
     where numeric_value is not null
       -- 有報だけ（stg_financial_facts の半期報告書 160 などは混ぜない）
       and doc_type_code = '120'

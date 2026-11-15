@@ -1,0 +1,4 @@
+schema: main
+name: stg_xbrl_namespaces
+description: raw_xbrl_namespaces の接頭辞に、タクソノミのモジュールと日付を付けたビュー。
+annotations: { queria: { published: false } }

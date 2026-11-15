@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: stg_financial_facts
+  - name: mart_financial_facts
     description: >-
       EDINET 書類取得 API (type=1 の XBRL。取り直し前の書類は type=5 の CSV) の財務データ本体を生に忠実な縦持ちで保持する
       ファクトテーブル。要素ID (標準タクソノミ, 例 jppfs_cor:NetSales) を横断比較キーとして
