@@ -19,7 +19,7 @@ with facts as (
         context_id,
         nullif(trim(value), '') as value,
         numeric_value
-    from {{ ref('stg_financial_facts') }}
+    from {{ ref('mart_financial_facts') }}
     -- 有報だけ（半期報告書 160 などは混ぜない）
     where doc_type_code = '120'
       and (

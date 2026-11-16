@@ -30,7 +30,7 @@ with summary as (
             when context_id like 'Prior3Year%' then -3
             when context_id like 'Prior4Year%' then -4
         end as year_offset
-    from {{ ref('stg_financial_facts') }}
+    from {{ ref('mart_financial_facts') }}
     where element_id like 'jpcrp\_cor:%SummaryOfBusinessResults' escape '\'
       -- 有報だけ。半期報告書の主要な経営指標は中間期の値で、年度の値と混ぜられない
       and doc_type_code = '120'
