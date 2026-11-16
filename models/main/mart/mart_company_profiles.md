@@ -1,5 +1,6 @@
-schema: main
-name: mart_company_profiles
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_company_profiles
 title: EDINET 有報の表紙と会社の概要
 description: |-
   有価証券報告書の表紙に書かれた会社名・英訳名・本店の所在の場所・電話番号・最寄りの連絡場所と、連結子会社の数・研究開発費を、1 書類 1 行にまとめたものです。
@@ -21,7 +22,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: period_end
@@ -60,3 +61,4 @@ fields:
   - name: contact_phone_digits
     title: 最寄りの連絡場所の電話番号（数字のみ）
     description: contact_phone を head_office_phone_digits と同じ方法で数字だけにしたもの
+---

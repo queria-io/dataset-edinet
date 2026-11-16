@@ -1,5 +1,6 @@
-schema: main
-name: mart_companies
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_companies
 title: EDINET 企業マスタ
 description: |-
   EDINET の提出者のマスタ（EDINETコードリスト）です。1 行が 1 提出者で、業種・市場区分・資本金・決算日・法人番号を持ちます。
@@ -40,4 +41,5 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
+---

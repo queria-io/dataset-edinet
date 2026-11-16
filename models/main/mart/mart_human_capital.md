@@ -1,5 +1,6 @@
-schema: main
-name: mart_human_capital
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_human_capital
 title: EDINET 従業員・女性活躍の指標
 description: |-
   有価証券報告書の従業員の状況、女性活躍・育児休業の指標、女性役員を、1 書類 1 行にまとめたものです。
@@ -20,7 +21,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: period_end
@@ -73,3 +74,4 @@ fields:
   - name: female_officer_ratio
     title: 役員に占める女性の比率
     description: 0〜1 の比率。有報の提出日時点（無ければ当期末）
+---

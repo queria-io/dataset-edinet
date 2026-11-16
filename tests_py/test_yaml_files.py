@@ -1,4 +1,4 @@
-"""リポジトリの YAML がすべて読めること（queria の push は壊れた .table.yml で止まる）。"""
+"""リポジトリの YAML がすべて読めること（queria.yml が壊れていると Sync が止まる）。"""
 
 import subprocess
 

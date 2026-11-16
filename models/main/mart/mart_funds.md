@@ -1,5 +1,6 @@
-schema: main
-name: mart_funds
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_funds
 title: EDINET ファンドマスタ
 description: |-
   EDINET のファンドのマスタ（ファンドコードリスト）です。1 行が 1 ファンドで、投資信託・ETF などのファンド名・区分・発行者を持ちます。
@@ -29,3 +30,4 @@ fields:
     description: 発行者（運用会社）の EDINETコード。mart_companies と結合できる
   - name: issuer_name
     title: 発行者名
+---

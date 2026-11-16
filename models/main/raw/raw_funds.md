@@ -1,5 +1,6 @@
-schema: main
-name: raw_funds
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.raw_funds
 description: ファンドコードリスト（FundcodeDlInfo.csv）のファンドマスタ。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
 fields:
   - name: fund_code
@@ -22,6 +23,5 @@ fields:
     description: 発行者名
   - name: _fetched_at
     description: コードリスト取得時刻（取得時メタ）
-annotations:
-  queria:
-    published: false
+published: false
+---

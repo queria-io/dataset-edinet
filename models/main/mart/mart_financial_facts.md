@@ -1,5 +1,6 @@
-schema: main
-name: stg_financial_facts
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.stg_financial_facts
 title: EDINET 財務ファクト（有報・半期報告書・生データ）
 description: |-
   有価証券報告書と半期報告書の財務データを、XBRL の要素 ID × コンテキストの縦持ちで持つものです。1 行が 1 要素・1 コンテキストです。
@@ -21,7 +22,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: doc_type_code
@@ -83,3 +84,4 @@ fields:
   - name: source
     title: 元データ
     description: xbrl=提出された XBRL（type=1）/ csv=EDINET が変換した CSV（type=5）。過去の書類を XBRL で取り直すまでの区別
+---

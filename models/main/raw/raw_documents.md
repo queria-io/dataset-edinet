@@ -1,5 +1,6 @@
-schema: main
-name: raw_documents
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.raw_documents
 description: EDINET 書類一覧 API (documents.json, type=2) の提出書類メタデータ。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
 fields:
   - name: seqNumber
@@ -62,6 +63,5 @@ fields:
     description: 縦覧区分（"1"=縦覧中, "2"=延長期間中, "0"=閲覧期間満了）
   - name: _fetch_date
     description: 取得対象日（書類一覧 API のファイル日付。取得時メタ）
-annotations:
-  queria:
-    published: false
+published: false
+---
