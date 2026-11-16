@@ -1,5 +1,6 @@
-schema: main
-name: raw_xbrl_files
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.raw_xbrl_files
 description: 書類取得 API (type=1) の ZIP の原本。1 行が 1 書類で、ZIP はアセットとして sha256 で指す
 fields:
   - name: doc_id
@@ -17,6 +18,5 @@ fields:
     description: 取得元の書類取得 API の URL（取得には EDINET の API キーが要る）
   - name: fetched_at
     description: 取得した日時
-annotations:
-  queria:
-    published: false
+published: false
+---

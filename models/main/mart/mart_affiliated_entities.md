@@ -1,5 +1,6 @@
-schema: main
-name: mart_affiliated_entities
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_affiliated_entities
 title: EDINET 関係会社の状況
 description: |-
   有価証券報告書の「関係会社の状況」の表を、1 社 1 行にまとめたものです。親会社・連結子会社・持分法適用関連会社・その他の関係会社の名称・住所・資本金・主要な事業の内容・議決権の所有割合・関係内容を持ちます。
@@ -21,7 +22,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 提出会社の法人番号（13桁）。関係会社の法人番号ではない
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: period_end
@@ -79,3 +80,4 @@ fields:
     title: 関係内容
     description: |-
       役員の兼任・資金援助・営業上の取引など。見出しが 2 段の表は「役員の兼任等: 有 / 営業上の取引等: …」とつないでいる
+---

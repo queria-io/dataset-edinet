@@ -1,5 +1,6 @@
-schema: main
-name: stg_taxonomy_item_names
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.stg_taxonomy_item_names
 description: EDINET タクソノミの要素の項目名（冗長ラベル、無ければ標準ラベル）の引き当て表。stg_financial_facts の item_name に使う
 fields:
   - name: namespace
@@ -8,6 +9,5 @@ fields:
     description: 要素またはメンバーの ID
   - name: label
     description: 日本語の項目名
-annotations:
-  queria:
-    published: false
+published: false
+---

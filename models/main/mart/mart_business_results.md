@@ -1,5 +1,6 @@
-schema: main
-name: mart_business_results
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_business_results
 title: EDINET 主要経営指標（正規化）
 description: |-
   有価証券報告書の「主要な経営指標等の推移」を、会計基準をまたいで同じ列に統一したものです。1 行が 1 書類・1 会計年度で、1 書類あたり最大 5 会計年度分あります。
@@ -17,7 +18,7 @@ fields:
     title: 提出者証券コード
   - name: corporate_number
     title: 提出者法人番号
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: period_end
@@ -78,3 +79,4 @@ fields:
     title: 投資活動によるキャッシュ・フロー
   - name: financing_cash_flow
     title: 財務活動によるキャッシュ・フロー
+---

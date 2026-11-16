@@ -1,5 +1,6 @@
-schema: main
-name: raw_xbrl_facts
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.raw_xbrl_facts
 description: XBRL（書類取得 API type=1）のインスタンスの値。1 行が 1 要素・1 コンテキストで、書かれたまま VARCHAR で持つ
 fields:
   - name: doc_id
@@ -20,6 +21,5 @@ fields:
     description: 値。テキストブロックは HTML
   - name: _fetched_at
     description: 取得日時
-annotations:
-  queria:
-    published: false
+published: false
+---

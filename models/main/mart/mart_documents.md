@@ -1,5 +1,6 @@
-schema: main
-name: mart_documents
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.mart_documents
 title: EDINET 書類一覧
 description: |-
   EDINET に提出された書類（有価証券報告書・四半期報告書・大量保有報告書など）のメタデータです。1 行が 1 書類で、提出者の法人番号を持ちます。
@@ -18,7 +19,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    annotations: { queria: { semantic: { role: entity, name: corporate_number } } }
+    semantic: {role: entity, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: fund_code
@@ -74,3 +75,4 @@ fields:
     title: CSV有無
   - name: legal_status
     title: 縦覧区分
+---

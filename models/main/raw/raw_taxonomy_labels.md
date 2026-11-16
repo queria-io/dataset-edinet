@@ -1,5 +1,6 @@
-schema: main
-name: raw_taxonomy_labels
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.raw_taxonomy_labels
 description: 金融庁が公表した EDINET タクソノミの年版ごとのラベル
 fields:
   - name: release
@@ -16,6 +17,5 @@ fields:
     description: 言語（ja / en）
   - name: label
     description: ラベル
-annotations:
-  queria:
-    published: false
+published: false
+---
