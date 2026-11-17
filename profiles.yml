@@ -16,6 +16,12 @@ edinet:
         custom_user_agent: "{{ env_var('QUERIA_USER_AGENT', '') }}"
       # financial_facts の parquet は大きく、回線によっては既定（1 リクエスト 30 秒）で
       # 読み切れず mart のビルドが落ちる（GitHub のランナー以外から回すとき）
+      # 公開中のデータファイルを読むときに、リポジトリのトークンを付ける。
+      # main にまだ入っていない apply のファイルはトークンが無いと 404 になる (shared/scripts/fdl_read.py)
+      module_paths:
+        - shared/scripts
+      plugins:
+        - module: fdl_read
       settings:
         http_timeout: 300
         http_retries: 5
