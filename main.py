@@ -29,6 +29,9 @@ import pyarrow as pa
 from dbt.cli.main import dbtRunner
 
 
+sys.path.append(str(Path(__file__).parent / "shared" / "scripts"))
+import fdl_read  # noqa: E402  (shared/scripts/fdl_read.py)
+
 from edinet import affiliates, taxonomy, xbrl
 from edinet.xbrl_facts import parse_instance, parse_labels
 from edinet.client import EdinetClient
@@ -233,6 +236,10 @@ def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
         conn.execute("INSTALL aws; LOAD aws;")
         # profiles.yml と同じ。既定の 30 秒だと、大きなテーブルの読み込みが途中で切れる
         conn.execute("SET http_timeout = 300; SET http_retries = 5;")
+        # 公開中のデータファイルをリポジトリのトークン付きで読む。main にまだ入って
+        # いない apply のバージョンのファイルは、トークンが無いと 404 になる
+        for statement in fdl_read.statements():
+            conn.execute(statement)
         conn.execute(
             f"ATTACH 'ducklake:{catalog_path}' AS edinet "
             f"(DATA_PATH '{data_url}', OVERRIDE_DATA_PATH true, "
