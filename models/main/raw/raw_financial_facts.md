@@ -1,7 +1,7 @@
 ---
 $schema: https://queria.io/schemas/table/v1.json
 table: main.raw_financial_facts
-description: 書類取得 API (type=5 CSV) の財務データ本体。要素ID×コンテキストの縦持ちファクト。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
+description: 書類取得 API (type=5 CSV) の財務データ本体（取得はやめていて、XBRL を取れない過去の書類だけ stg_financial_facts で使う）。要素ID×コンテキストの縦持ちファクト。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
 fields:
   - name: doc_id
     description: 書類管理番号（documents と結合）
