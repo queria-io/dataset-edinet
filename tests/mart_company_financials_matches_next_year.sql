@@ -15,6 +15,7 @@ ordered as (
     select
         *,
         lead(doc_id) over (partition by edinet_code order by period_end) as next_doc_id,
+        lead(period_start) over (partition by edinet_code order by period_end) as next_period_start,
         lead(is_consolidated) over (partition by edinet_code order by period_end) as next_is_consolidated,
         lead(accounting_standard) over (partition by edinet_code order by period_end) as next_accounting_standard
     from {{ ref('mart_company_financials') }}
@@ -48,7 +49,9 @@ pairs as (
         on p.doc_id = o.next_doc_id
         and p.is_consolidated = o.is_consolidated
         and p.accounting_standard = o.accounting_standard
-    where o.is_consolidated = o.next_is_consolidated
+    -- 翌年の有報が抜けている会社は、2 年先の有報の前期の値と比べないよう、期間が続く組だけを比べる
+    where o.next_period_start = o.period_end + 1
+        and o.is_consolidated = o.next_is_consolidated
         and o.accounting_standard = o.next_accounting_standard
 ),
 
