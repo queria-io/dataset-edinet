@@ -22,8 +22,9 @@ jobs:
     uses: queria-io/dataset-shared/.github/workflows/sync.yml@3152e2a8a30c350f15e5ab15d7a55847fdf0679c
     with:
       dataset_name: edinet
-      # 共通の既定 90 分では足りない。成功ランの実測は最大 147 分
-      timeout_minutes: 240
+      # 共通の既定 90 分では足りない。run 44873306215 は取得とビルドに 2 時間、
+      # fdl push のプロファイルに 2 時間を超えて 240 分で打ち切られた。GitHub のランナーの上限の 360 分にする
+      timeout_minutes: 360
     secrets:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
