@@ -5,7 +5,7 @@ title: EDINET 財務ファクト（有報・半期報告書・生データ）
 description: |-
   有価証券報告書と半期報告書の財務データを、XBRL の要素 ID × コンテキストの縦持ちで持つものです。1 行が 1 要素・1 コンテキストです。
 
-  - 元は提出された XBRL（書類取得 API type=1）です。項目名は金融庁のタクソノミの、書類と同じ年版のラベルです。過去の書類は取り直しの途中で、まだのものは EDINET が XBRL を変換した CSV（type=5）の行です。`source` で分けられます
+  - 元は提出された XBRL（書類取得 API type=1）です。項目名は金融庁のタクソノミの、書類と同じ年版のラベルです。EDINET が XBRL を配らなくなった過去の一部の書類だけ、以前に取った EDINET の変換 CSV（type=5）の行です。`source` で分けられます
 
   - `doc_type_code` で書類の種類を分けます（120=有価証券報告書、160=半期報告書）
   - 提出時点の本体だけで、訂正報告書による訂正は反映していません
@@ -83,5 +83,5 @@ fields:
     description: XBRL インスタンス（または CSV）の中の並び順
   - name: source
     title: 元データ
-    description: xbrl=提出された XBRL（type=1）/ csv=EDINET が変換した CSV（type=5）。過去の書類を XBRL で取り直すまでの区別
+    description: xbrl=提出された XBRL（type=1）/ csv=EDINET が変換した CSV（type=5）。XBRL を取れない過去の書類だけ csv
 ---

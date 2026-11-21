@@ -17,3 +17,6 @@ dist/
 
 # fdl checkout の作業カタログ
 .fdl/
+
+# fdl のアセットとして上げる XBRL の ZIP (scripts/build.sh)
+.xbrl/
