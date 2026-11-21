@@ -28,6 +28,10 @@ seeds:
     # context の頭と「相対年度」の値をそのまま写したもの。
     # CSV で相対年度が空の頭（RecordDateInstant など）は、空の値で入れる。
     # 新しい頭が出てきたら stg_financial_facts_relative_year_known のテストが落ちるので、ここに 1 行足す。
+    #
+    # financial_items: mart_company_financials の列（item）と、その値を取る XBRL の要素の対応表。
+    # 同じ列に複数の要素があるときは priority の小さい要素を使う。accounting_standard が書類の会計基準と
+    # 違う要素は使わない（空ならどの基準の書類でも使う）。basis が company の列は提出会社（個別）の値を取る。
 
 models:
   edinet:

@@ -9,7 +9,7 @@
 | 書類一覧 API（documents.json、Version 2） | `main.mart_documents` |
 | EDINETコードリスト（EdinetcodeDlInfo.csv） | `main.mart_companies` |
 | ファンドコードリスト（FundcodeDlInfo.csv） | `main.mart_funds` |
-| 書類取得 API（type=1 の XBRL） | `main.stg_financial_facts`・`main.mart_business_results`・`main.mart_human_capital`・`main.mart_company_profiles`・`main.mart_affiliated_entities` |
+| 書類取得 API（type=1 の XBRL） | `main.stg_financial_facts`・`main.mart_company_financials`・`main.mart_business_results`・`main.mart_human_capital`・`main.mart_company_profiles`・`main.mart_affiliated_entities` |
 | EDINET タクソノミ（金融庁） | `main.stg_financial_facts` の項目名 |
 
 - [EDINET の利用規約](https://disclosure2.edinet-fsa.go.jp/)に従います
@@ -23,6 +23,7 @@
 | `main.mart_companies` | 1 行が 1 提出者。企業・組合・外国法人などの業種・市場区分・資本金・決算日・法人番号 |
 | `main.mart_funds` | 1 行が 1 ファンド。投資信託・ETF などの特定有価証券のファンド名・区分・発行者 |
 | `main.stg_financial_facts` | 1 行が 1 要素・1 コンテキスト。有価証券報告書・半期報告書の財務データの本体 |
+| `main.mart_company_financials` | 1 行が 1 社・1 決算期。有報の損益・貸借対照表・キャッシュ・フローの主要な項目と営業利益率・ROE などの指標を、会計基準をまたいで統一したもの |
 | `main.mart_business_results` | 1 行が 1 書類・1 会計年度。有報の主要経営指標を会計基準をまたいで統一したもの |
 | `main.mart_human_capital` | 1 行が 1 書類。有報の従業員の状況・女性活躍と育児休業の指標・女性役員 |
 | `main.mart_affiliated_entities` | 1 行が 1 書類・1 関係会社。有報の関係会社の状況（親会社・連結子会社・持分法適用関連会社などの名称・住所・資本金・事業・議決権の所有割合・関係内容） |
@@ -35,6 +36,25 @@
 - `corporate_number`（提出者の法人番号）で houjin_bangou・gbizinfo と結合できます
 
 ## 使い方
+
+業種ごとに、直近の決算期の営業利益率と ROE の中央値を比べる:
+
+```sql
+WITH latest AS (
+  SELECT *
+  FROM edinet.main.mart_company_financials
+  QUALIFY row_number() OVER (PARTITION BY edinet_code ORDER BY period_end DESC) = 1
+)
+SELECT c.industry,
+       count(*) AS companies,
+       median(l.operating_margin) AS median_operating_margin,
+       median(l.roe) AS median_roe
+FROM latest AS l
+JOIN edinet.main.mart_companies AS c USING (edinet_code)
+WHERE c.listing_status = '上場'
+GROUP BY c.industry
+ORDER BY median_roe DESC;
+```
 
 2 社の売上高の推移を比べる:
 
@@ -129,6 +149,14 @@ ORDER BY submit_date DESC;
 - `mart_affiliated_entities` は XBRL 本体（type=1）の「関係会社の状況」の表を列の見出しで読んで作っています。有報に載っている関係会社だけで、大きな会社は主要な関係会社だけを載せています（「上記以外の連結子会社数は 208 社」など）。名称に法人番号は付いていません。投資信託・投資法人の有報には関係会社の状況が無いので含みません。過去の書類は新しい提出日から順に取り込んでいる途中です
 - `mart_company_profiles` の表紙の値は提出日時点の記載のままです。電話番号の数字列（`head_office_phone_digits`）は、市外局番の無い記載（「東京(3352)1439」）や番号が 2 つある記載では NULL です。代表者・事務連絡者の氏名は含みません
 - 1 株当たり純資産は、IFRS 採用企業では 1 株当たり親会社所有者帰属持分です。外貨建て（USD）で開示された値は含みません。自己資本比率は 0〜1 の比率で、債務超過なら負の値です
+
+## 企業の財務指標の注意
+
+- `mart_company_financials` の値は、各決算期の有報の財務諸表の本体から取っています。売上高だけは業種ごとに要素が違う（営業収益・経常収益など）ので、「主要な経営指標等の推移」の値を使っています。どの要素を何の列にしたかは `seeds/financial_items.csv` にあります
+- 書類の会計基準の要素だけを使います。IFRS へ移った年の有報に載っている日本基準の値は使いません。経常利益は日本基準だけの項目で、IFRS・米国基準の会社は NULL です
+- 会社独自の要素で開示された値は含みません。IFRS の一部の会社（トヨタ自動車の売上収益など）と、米国基準の会社の財務諸表の本体の値（売上原価・営業利益など）は NULL です
+- ROE・ROA は期首と期末の平均で割った値で、決算短信の自己資本当期純利益率と同じ計算です。期首の値と売上高の前期比の前期の値は、同じ有報に載った前期の値です
+- ビルドのたびに 3 つの検査を流します。総資産 = 負債 + 純資産 が成り立つこと、財務諸表の本体の値と同じ書類の「主要な経営指標等の推移」の値が一致すること、当期純利益が翌年の有報に載った前期の値と一致すること（`tests/mart_company_financials_*.sql`）。会社の記載の誤りや遡って修正した値があるので、後の 2 つは比べた値のうち一定の割合（1%・5%）を超えて食い違ったときに失敗します
 
 ## 従業員・女性活躍の指標の注意
 

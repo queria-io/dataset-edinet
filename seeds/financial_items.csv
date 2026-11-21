@@ -1,0 +1,89 @@
+item,priority,element_id,unit_id,basis,accounting_standard
+revenue,1,jpcrp_cor:RevenueIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+revenue,2,jpigp_cor:RevenueIFRS,JPY,doc,IFRS
+revenue,3,jpigp_cor:NetSalesIFRS,JPY,doc,IFRS
+revenue,4,jpcrp_cor:RevenuesUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+revenue,5,jpcrp_cor:OperatingRevenue1SummaryOfBusinessResults,JPY,doc,Japan GAAP
+revenue,6,jpcrp_cor:GrossOperatingRevenueSummaryOfBusinessResults,JPY,doc,Japan GAAP
+revenue,7,jpcrp_cor:NetSalesSummaryOfBusinessResults,JPY,doc,Japan GAAP
+revenue,8,jpcrp_cor:OperatingRevenue2SummaryOfBusinessResults,JPY,doc,Japan GAAP
+revenue,9,jpcrp_cor:OrdinaryIncomeSummaryOfBusinessResults,JPY,doc,Japan GAAP
+revenue,10,jppfs_cor:OperatingRevenue1,JPY,doc,Japan GAAP
+revenue,11,jppfs_cor:NetSales,JPY,doc,Japan GAAP
+revenue,12,jppfs_cor:OperatingRevenue2,JPY,doc,Japan GAAP
+cost_of_sales,1,jpigp_cor:CostOfSalesIFRS,JPY,doc,IFRS
+cost_of_sales,2,jppfs_cor:CostOfSales,JPY,doc,Japan GAAP
+gross_profit,1,jpigp_cor:GrossProfitIFRS,JPY,doc,IFRS
+gross_profit,2,jppfs_cor:GrossProfit,JPY,doc,Japan GAAP
+sga_expenses,1,jpigp_cor:SellingGeneralAndAdministrativeExpensesIFRS,JPY,doc,IFRS
+sga_expenses,2,jppfs_cor:SellingGeneralAndAdministrativeExpenses,JPY,doc,Japan GAAP
+operating_income,1,jpigp_cor:OperatingProfitLossIFRS,JPY,doc,IFRS
+operating_income,2,jpcrp_cor:OperatingIncomeLossUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+operating_income,3,jppfs_cor:OperatingIncome,JPY,doc,Japan GAAP
+ordinary_income,1,jppfs_cor:OrdinaryIncome,JPY,doc,Japan GAAP
+ordinary_income,2,jpcrp_cor:OrdinaryIncomeLossSummaryOfBusinessResults,JPY,doc,Japan GAAP
+profit_before_tax,1,jpigp_cor:ProfitLossBeforeTaxIFRS,JPY,doc,IFRS
+profit_before_tax,2,jpcrp_cor:ProfitLossBeforeTaxIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+profit_before_tax,3,jpcrp_cor:ProfitLossBeforeTaxUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+profit_before_tax,4,jppfs_cor:IncomeBeforeIncomeTaxes,JPY,doc,Japan GAAP
+net_income,1,jpigp_cor:ProfitLossAttributableToOwnersOfParentIFRS,JPY,doc,IFRS
+net_income,2,jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+net_income,3,jpcrp_cor:NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+net_income,4,jppfs_cor:ProfitLossAttributableToOwnersOfParent,JPY,doc,Japan GAAP
+net_income,5,jpcrp_cor:ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults,JPY,doc,Japan GAAP
+net_income,6,jpcrp_cor:NetIncomeLossSummaryOfBusinessResults,JPY,doc,Japan GAAP
+total_assets,1,jpigp_cor:AssetsIFRS,JPY,doc,IFRS
+total_assets,2,jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+total_assets,3,jpcrp_cor:TotalAssetsUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+total_assets,4,jppfs_cor:Assets,JPY,doc,Japan GAAP
+total_assets,5,jpcrp_cor:TotalAssetsSummaryOfBusinessResults,JPY,doc,Japan GAAP
+current_assets,1,jpigp_cor:CurrentAssetsIFRS,JPY,doc,IFRS
+current_assets,2,jppfs_cor:CurrentAssets,JPY,doc,Japan GAAP
+total_liabilities,1,jpigp_cor:LiabilitiesIFRS,JPY,doc,IFRS
+total_liabilities,2,jppfs_cor:Liabilities,JPY,doc,Japan GAAP
+current_liabilities,1,jpigp_cor:TotalCurrentLiabilitiesIFRS,JPY,doc,IFRS
+current_liabilities,2,jppfs_cor:CurrentLiabilities,JPY,doc,Japan GAAP
+net_assets,1,jpigp_cor:EquityIFRS,JPY,doc,IFRS
+net_assets,2,jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+net_assets,3,jppfs_cor:NetAssets,JPY,doc,Japan GAAP
+net_assets,4,jpcrp_cor:NetAssetsSummaryOfBusinessResults,JPY,doc,Japan GAAP
+owners_equity,1,jpigp_cor:EquityAttributableToOwnersOfParentIFRS,JPY,doc,IFRS
+owners_equity,2,jpcrp_cor:EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+owners_equity,3,jpcrp_cor:EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+subscription_rights,1,jppfs_cor:SubscriptionRightsToShares,JPY,doc,Japan GAAP
+non_controlling_interests,1,jppfs_cor:NonControllingInterests,JPY,doc,Japan GAAP
+non_controlling_interests,2,jppfs_cor:MinorityInterests,JPY,doc,Japan GAAP
+cash_and_equivalents,1,jpigp_cor:CashAndCashEquivalentsIFRS,JPY,doc,IFRS
+cash_and_equivalents,2,jpcrp_cor:CashAndCashEquivalentsIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+cash_and_equivalents,3,jpcrp_cor:CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+cash_and_equivalents,4,jppfs_cor:CashAndCashEquivalents,JPY,doc,Japan GAAP
+cash_and_equivalents,5,jpcrp_cor:CashAndCashEquivalentsSummaryOfBusinessResults,JPY,doc,Japan GAAP
+operating_cash_flow,1,jpigp_cor:NetCashProvidedByUsedInOperatingActivitiesIFRS,JPY,doc,IFRS
+operating_cash_flow,2,jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+operating_cash_flow,3,jpcrp_cor:CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+operating_cash_flow,4,jppfs_cor:NetCashProvidedByUsedInOperatingActivities,JPY,doc,Japan GAAP
+operating_cash_flow,5,jpcrp_cor:NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults,JPY,doc,Japan GAAP
+investing_cash_flow,1,jpigp_cor:NetCashProvidedByUsedInInvestingActivitiesIFRS,JPY,doc,IFRS
+investing_cash_flow,2,jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+investing_cash_flow,3,jpcrp_cor:CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+investing_cash_flow,4,jppfs_cor:NetCashProvidedByUsedInInvestmentActivities,JPY,doc,Japan GAAP
+investing_cash_flow,5,jpcrp_cor:NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults,JPY,doc,Japan GAAP
+financing_cash_flow,1,jpigp_cor:NetCashProvidedByUsedInFinancingActivitiesIFRS,JPY,doc,IFRS
+financing_cash_flow,2,jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesIFRSSummaryOfBusinessResults,JPY,doc,IFRS
+financing_cash_flow,3,jpcrp_cor:CashFlowsFromUsedInFinancingActivitiesUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+financing_cash_flow,4,jppfs_cor:NetCashProvidedByUsedInFinancingActivities,JPY,doc,Japan GAAP
+financing_cash_flow,5,jpcrp_cor:NetCashProvidedByUsedInFinancingActivitiesSummaryOfBusinessResults,JPY,doc,Japan GAAP
+capital_expenditure,1,jpigp_cor:PurchaseOfPropertyPlantAndEquipmentInvCFIFRS,JPY,doc,IFRS
+capital_expenditure,2,jppfs_cor:PurchaseOfPropertyPlantAndEquipmentInvCF,JPY,doc,Japan GAAP
+depreciation,1,jpigp_cor:DepreciationAndAmortizationOpeCFIFRS,JPY,doc,IFRS
+depreciation,2,jppfs_cor:DepreciationAndAmortizationOpeCF,JPY,doc,Japan GAAP
+research_and_development_expenses,1,jpcrp_cor:ResearchAndDevelopmentExpensesResearchAndDevelopmentActivities,JPY,doc,
+number_of_employees,1,jpcrp_cor:NumberOfEmployees,pure,doc,
+total_issued_shares,1,jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults,shares,company,
+basic_eps,1,jpcrp_cor:BasicEarningsLossPerShareIFRSSummaryOfBusinessResults,JPYPerShares,doc,IFRS
+basic_eps,2,jpcrp_cor:BasicEarningsLossPerShareUSGAAPSummaryOfBusinessResults,JPYPerShares,doc,US GAAP
+basic_eps,3,jpcrp_cor:BasicEarningsLossPerShareSummaryOfBusinessResults,JPYPerShares,doc,Japan GAAP
+bps,1,jpcrp_cor:EquityToAssetRatioIFRSSummaryOfBusinessResults,JPYPerShares,doc,IFRS
+bps,2,jpcrp_cor:EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults,JPYPerShares,doc,US GAAP
+bps,3,jpcrp_cor:NetAssetsPerShareSummaryOfBusinessResults,JPYPerShares,doc,Japan GAAP
+dividend_per_share,1,jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults,JPYPerShares,company,
