@@ -219,11 +219,13 @@ def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
         conn.close()
 
 
-STEPS = ("ingest", "build")
+STEPS = ("ingest", "compact", "build")
+# 引数を省いたときに流す手順。compact は全ファイルを書き直すので、明示したときだけ流す
+DEFAULT_STEPS = ("ingest", "build")
 
 
 def steps(argv: list[str]) -> list[str]:
-    """``python main.py [ingest] [build]``。省くと両方を順に流す。
+    """``python main.py [ingest] [compact] [build]``。省くと ingest と build を順に流す。
 
     取り込みとビルドを別々に公開できるようにする。ビルドやテストが落ちても、
     取り込みだけを先に公開しておけば、同じ書類を取り直さずに済む。
@@ -231,7 +233,7 @@ def steps(argv: list[str]) -> list[str]:
     unknown = [a for a in argv if a not in STEPS]
     if unknown:
         raise SystemExit(f"unknown step: {' '.join(unknown)} (choose from {', '.join(STEPS)})")
-    return [s for s in STEPS if s in argv] if argv else list(STEPS)
+    return [s for s in STEPS if s in argv] if argv else list(DEFAULT_STEPS)
 
 
 def main() -> None:
@@ -239,6 +241,8 @@ def main() -> None:
     chosen = steps(sys.argv[1:])
     if "ingest" in chosen:
         ingest()
+    if "compact" in chosen:
+        compact()
     # 取り込みだけのときはモデルを作り直さず、SQL のコンパイルだけを流す。fdl commit に渡す
     # 記述のテーブルの SQL は target/manifest.json の compiled_code から足す
     # (shared/scripts/dbt_lineage.py) ので、無いとそのバージョンから SQL と依存先が消える
@@ -250,6 +254,36 @@ def main() -> None:
         if "ingest" not in chosen:
             refresh_taxonomy()
         run_dbt(DBT_BUILD, target)
+
+
+# 取り込みは日ごと・書類のまとまりごとに小さいファイルを足すので、_source のファイルは
+# 数千個になる。読み手はファイルごとに HTTP の往復をするので、隣り合うファイルをこの大きさまで
+# 1 つにまとめる。取り込んだ順 (提出日の順) のまま並ぶので、doc_id の絞り込みは行グループの統計で効く
+TARGET_FILE_SIZE = "128MB"
+
+
+def compact() -> None:
+    """_source の各テーブルの削除を書き込み直し、隣り合う小さいファイルをまとめる。
+
+    行は変えないので、ビルドの結果は変わらない。まとめたファイルは新しいバージョンとして
+    上がり、前のファイルは前のバージョンが保持から外れるまで残る。
+    """
+    with _ducklake_connect() as conn:
+        conn.execute(f"CALL edinet.set_option('target_file_size', '{TARGET_FILE_SIZE}')")
+        tables = [
+            row[0]
+            for row in conn.execute(
+                "SELECT table_name FROM duckdb_tables() "
+                "WHERE database_name = 'edinet' AND schema_name = '_source' ORDER BY table_name"
+            ).fetchall()
+        ]
+        for table in tables:
+            # 削除ファイルの付いたデータファイルは、削除を反映して書き直してからまとめる
+            conn.execute(
+                f"CALL ducklake_rewrite_data_files('edinet', '{table}', schema => '_source', delete_threshold => 0)"
+            )
+            conn.execute(f"CALL ducklake_merge_adjacent_files('edinet', '{table}', schema => '_source')")
+            logger.info("compacted _source.%s", table)
 
 
 def refresh_taxonomy() -> None:

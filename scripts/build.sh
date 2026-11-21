@@ -8,4 +8,6 @@ export FDL_UNDESCRIBED="${FDL_UNDESCRIBED:-unlisted}"
 # 渡されないとき (GitHub Actions) はリポジトリの .xbrl に置く。置かないと ZIP がアセットに残らない
 export EDINET_XBRL_DIR="${EDINET_XBRL_DIR:-$PWD/.xbrl}"
 export FDL_ASSETS="${FDL_ASSETS:-$EDINET_XBRL_DIR}"
+# _source の小さいファイルをまとめ直すときは `scripts/build.sh python main.py compact`。
+# 取り込みとビルドをせずに、まとめたファイルを新しいバージョンとして上げる
 exec "$(dirname "$0")/../shared/scripts/build-fdl.sh" "$@"
