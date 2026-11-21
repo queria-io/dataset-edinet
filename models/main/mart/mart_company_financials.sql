@@ -11,8 +11,11 @@ with docs as (
     from {{ ref('stg_documents') }}
     where doc_type_code = '120'
         and fund_code is null
+    -- 財務局が書類情報（決算期など）を修正すると、同じ提出日時の行が修正の操作日にも載る。修正後の行を使う
     qualify not bool_or(is_withdrawn) over (partition by doc_id)
-        and row_number() over (partition by doc_id order by submit_datetime desc) = 1
+        and row_number() over (
+            partition by doc_id order by submit_datetime desc, ope_datetime desc nulls last
+        ) = 1
 ),
 
 -- 会計基準（Japan GAAP・IFRS・US GAAP）。type=5 の CSV しか無い書類には無い
@@ -76,13 +79,14 @@ doc_basis as (
 
 -- 1 書類 × 1 列に 1 つの値。株式数と配当は提出会社の値（個別）しか無いので、basis = company で個別を引く。
 -- 連結財務諸表の無い書類は個別の値を先に使い、個別のコンテキストに無い列（連結のコンテキストに書かれた
--- 従業員数など）だけ連結のコンテキストの値を使う。連結財務諸表の無い書類の値はどちらも提出会社の値
+-- 従業員数など）だけ連結のコンテキストの値を使う。連結財務諸表の無い書類の値はどちらも提出会社の値。
+-- 連結の書類では連結のコンテキストの値を先に使い、basis = company の行は連結の値が無いときだけ使う
 picked as (
     select
         f.doc_id,
         f.item,
         f.is_prior,
-        arg_min(f.numeric_value, (f.is_consolidated, f.priority)) as value
+        arg_min(f.numeric_value, (f.is_consolidated <> b.is_consolidated, f.priority)) as value
     from facts as f
     join doc_basis as b using (doc_id)
     where case
@@ -117,22 +121,24 @@ wide as (
 ),
 
 -- 日本基準の自己資本は、純資産から新株予約権と非支配株主持分を引いた額。
--- IFRS・米国基準は親会社の所有者に帰属する持分の要素をそのまま使う
+-- IFRS・米国基準は親会社の所有者に帰属する持分の要素をそのまま使う。
+-- 連結財務諸表の無い IFRS の会社は親会社の所有者に帰属する持分を開示しないので、資本合計を使う
 equity as (
     select
         w.doc_id,
         {%- for suffix in ['', '_prior'] %}
         coalesce(
             w.owners_equity{{ suffix }},
-            if(
-                coalesce(s.accounting_standard, 'Japan GAAP') = 'Japan GAAP',
-                w.net_assets{{ suffix }} - coalesce(w.subscription_rights{{ suffix }}, 0)
-                    - coalesce(w.non_controlling_interests{{ suffix }}, 0),
-                null
-            )
+            case
+                when coalesce(s.accounting_standard, 'Japan GAAP') = 'Japan GAAP'
+                    then w.net_assets{{ suffix }} - coalesce(w.subscription_rights{{ suffix }}, 0)
+                        - coalesce(w.non_controlling_interests{{ suffix }}, 0)
+                when not b.is_consolidated then w.net_assets{{ suffix }}
+            end
         ) as owners_equity{{ suffix }}{{ ',' if not loop.last }}
         {%- endfor %}
     from wide as w
+    join doc_basis as b using (doc_id)
     left join standards as s using (doc_id)
 ),
 
