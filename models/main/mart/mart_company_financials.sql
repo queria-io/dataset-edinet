@@ -4,22 +4,15 @@
 -- どの要素を何の列にするかは seeds/financial_items.csv が決める（priority の小さい要素を優先）。
 -- 値は財務諸表の本体の要素を先に、主要な経営指標（jpcrp_cor:*SummaryOfBusinessResults）を後に引く。
 -- 売上高だけは業種ごとに本体の要素が違う（営業収益・経常収益など）ので、会社が選んで書いた経営指標を先に引く。
+-- 書類一覧は取下げの操作日にも同じ doc_id を載せるので、取下げを示す行が 1 つでもある書類は使わない。
+-- 先に取下げの行を外してから doc_id で畳むと、取下げ前に取得した行が残る
 with docs as (
-    select doc_id, edinet_code, sec_code, corporate_number, filer_name, period_start, period_end, submit_date
+    select doc_id, edinet_code, sec_code, corporate_number, filer_name, period_start, period_end, submit_date, submit_datetime
     from {{ ref('stg_documents') }}
     where doc_type_code = '120'
         and fund_code is null
-        and not is_withdrawn
-    qualify row_number() over (partition by doc_id order by submit_datetime desc) = 1
-),
-
--- 同じ決算期に有報が複数ある会社は、最後に提出した書類を使う
-latest_docs as (
-    select *
-    from docs
-    qualify row_number() over (
-        partition by edinet_code, period_end order by submit_date desc, doc_id desc
-    ) = 1
+    qualify not bool_or(is_withdrawn) over (partition by doc_id)
+        and row_number() over (partition by doc_id order by submit_datetime desc) = 1
 ),
 
 -- 会計基準（Japan GAAP・IFRS・US GAAP）。type=5 の CSV しか無い書類には無い
@@ -68,7 +61,7 @@ facts as (
             'Prior1YearDuration_NonConsolidatedMember', 'Prior1YearInstant_NonConsolidatedMember'
         )
         and f.numeric_value is not null
-        and f.doc_id in (select doc_id from latest_docs)
+        and f.doc_id in (select doc_id from docs)
         and (i.accounting_standard is null or s.accounting_standard is null or i.accounting_standard = s.accounting_standard)
 ),
 
@@ -81,16 +74,22 @@ doc_basis as (
     group by doc_id
 ),
 
--- 1 書類 × 1 列に 1 つの値。株式数と配当は提出会社の値（個別）しか無いので、basis = company で個別を引く
+-- 1 書類 × 1 列に 1 つの値。株式数と配当は提出会社の値（個別）しか無いので、basis = company で個別を引く。
+-- 連結財務諸表の無い書類は個別の値を先に使い、個別のコンテキストに無い列（連結のコンテキストに書かれた
+-- 従業員数など）だけ連結のコンテキストの値を使う。連結財務諸表の無い書類の値はどちらも提出会社の値
 picked as (
     select
         f.doc_id,
         f.item,
         f.is_prior,
-        arg_min(f.numeric_value, f.priority) as value
+        arg_min(f.numeric_value, (f.is_consolidated, f.priority)) as value
     from facts as f
     join doc_basis as b using (doc_id)
-    where f.is_consolidated = (b.is_consolidated and f.basis = 'doc')
+    where case
+        when f.basis = 'company' then not f.is_consolidated
+        when b.is_consolidated then f.is_consolidated
+        else true
+    end
     group by all
 ),
 
@@ -179,11 +178,15 @@ shaped as (
         e.owners_equity_prior,
         d.doc_id,
         d.submit_date
-    from latest_docs as d
+    from docs as d
     join wide as w using (doc_id)
     join equity as e using (doc_id)
     join doc_basis as b using (doc_id)
     left join standards as s using (doc_id)
+    -- 同じ決算期に有報が複数ある会社は、値を取れた書類のうち最後に提出した書類を使う
+    qualify row_number() over (
+        partition by d.edinet_code, d.period_end order by d.submit_datetime desc, d.doc_id desc
+    ) = 1
 )
 
 -- ROE・ROA は期首と期末の平均で割る（決算短信の自己資本当期純利益率と同じ）
