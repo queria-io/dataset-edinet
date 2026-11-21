@@ -28,10 +28,13 @@ profit_before_tax,3,jpcrp_cor:ProfitLossBeforeTaxUSGAAPSummaryOfBusinessResults,
 profit_before_tax,4,jppfs_cor:IncomeBeforeIncomeTaxes,JPY,doc,Japan GAAP
 net_income,1,jpigp_cor:ProfitLossAttributableToOwnersOfParentIFRS,JPY,doc,IFRS
 net_income,2,jpcrp_cor:ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults,JPY,doc,IFRS
-net_income,3,jpcrp_cor:NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
-net_income,4,jppfs_cor:ProfitLossAttributableToOwnersOfParent,JPY,doc,Japan GAAP
-net_income,5,jpcrp_cor:ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults,JPY,doc,Japan GAAP
-net_income,6,jpcrp_cor:NetIncomeLossSummaryOfBusinessResults,JPY,doc,Japan GAAP
+net_income,3,jpigp_cor:ProfitLossIFRS,JPY,company,IFRS
+net_income,4,jpcrp_cor:ProfitLossIFRSSummaryOfBusinessResults,JPY,company,IFRS
+net_income,5,jpcrp_cor:NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP
+net_income,6,jppfs_cor:ProfitLossAttributableToOwnersOfParent,JPY,doc,Japan GAAP
+net_income,7,jpcrp_cor:ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults,JPY,doc,Japan GAAP
+net_income,8,jppfs_cor:ProfitLoss,JPY,doc,Japan GAAP
+net_income,9,jpcrp_cor:NetIncomeLossSummaryOfBusinessResults,JPY,doc,Japan GAAP
 total_assets,1,jpigp_cor:AssetsIFRS,JPY,doc,IFRS
 total_assets,2,jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults,JPY,doc,IFRS
 total_assets,3,jpcrp_cor:TotalAssetsUSGAAPSummaryOfBusinessResults,JPY,doc,US GAAP

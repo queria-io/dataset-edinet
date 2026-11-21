@@ -57,7 +57,7 @@ fields:
     title: 税引前当期純利益
   - name: net_income
     title: 親会社株主に帰属する当期純利益
-    description: 個別の値の会社は当期純利益。IFRS・米国基準は親会社の所有者に帰属する当期利益
+    description: 個別の値の会社は当期純利益（IFRS は当期利益）。IFRS・米国基準は親会社の所有者に帰属する当期利益
   - name: total_assets
     title: 総資産
   - name: current_assets
@@ -71,7 +71,7 @@ fields:
     description: IFRS は資本合計、米国基準は非支配持分を含む純資産
   - name: owners_equity
     title: 自己資本
-    description: 日本基準は純資産から新株予約権と非支配株主持分を引いた額。IFRS・米国基準は親会社の所有者に帰属する持分
+    description: 日本基準は純資産から新株予約権と非支配株主持分を引いた額。IFRS・米国基準は親会社の所有者に帰属する持分。IFRS で個別の値の会社は資本合計
   - name: cash_and_equivalents
     title: 現金及び現金同等物の期末残高
   - name: operating_cash_flow
@@ -117,7 +117,7 @@ fields:
     description: owners_equity / total_assets。債務超過なら負の値
   - name: revenue_growth
     title: 売上高の前期比
-    description: revenue を同じ有報に載った前期の値で割って 1 を引いた値（0.05 なら 5% 増）
+    description: revenue を同じ有報に載った前期の値で割って 1 を引いた値（0.05 なら 5% 増）。決算期を変更した年は月数の違う期間どうしの比
   - name: doc_id
     title: 書類管理番号
     description: 値を取った有報。mart_documents / stg_financial_facts と結合できる
