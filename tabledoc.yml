@@ -1,0 +1,52 @@
+$schema: https://tabledoc.queria.io/schemas/dataset/v1.json
+name: edinet
+title: EDINET 開示データ
+description: |-
+  金融庁 EDINET の開示書類の一覧、提出者とファンドのマスタ、有価証券報告書・半期報告書の財務データと主要経営指標、有報の従業員・女性活躍の指標、表紙の本店所在地・電話番号、関係会社の状況です。提出者の法人番号で houjin_bangou・gbizinfo と結合できます。
+
+  出典：金融庁 EDINET（書類一覧 API・書類取得 API・EDINETコードリスト・ファンドコードリスト）。Queria が加工したもので、提供情報の最新性、正確性、完全性等が保証されたものではありません。
+topics:
+  - EDINET
+  - 有価証券報告書
+  - 開示
+  - 企業
+  - 法人番号
+  - 企業マスタ
+  - 投資信託
+  - 財務
+  - 財務諸表
+  - XBRL
+  - 決算
+  - 人的資本
+  - 従業員
+  - 平均年収
+  - 女性活躍
+  - 関係会社
+  - 子会社
+  - 親会社
+  - 本店所在地
+  - 電話番号
+  - 研究開発費
+homepage: https://github.com/queria-io/dataset-edinet
+language: ja
+licenses:
+  - JP-FSA-EDINET
+
+sources:
+  - id: disclosure2
+    title: EDINET（金融庁）
+    path: https://disclosure2.edinet-fsa.go.jp/
+
+contributors:
+  - id: fsa
+    title: 金融庁
+    path: https://www.fsa.go.jp/
+    roles: [rightsHolder]
+
+temporal_coverage: {start: "2016-06-23", end: null}
+spatial_coverage: [JP]
+update_frequency: daily
+schemas:
+  - name: main
+    title: EDINET 開示データ
+synonyms: [EDINET, 有価証券報告書, 有報, 開示書類, XBRL, 決算, 人的資本, 平均年収, 平均年間給与, 男女の賃金の差異, 女性管理職比率]

@@ -1,6 +1,4 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.mart_company_profiles
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: EDINET 有報の表紙と会社の概要
 description: |-
   有価証券報告書の表紙に書かれた会社名・英訳名・本店の所在の場所・電話番号・最寄りの連絡場所と、連結子会社の数・研究開発費を、1 書類 1 行にまとめたものです。
@@ -8,9 +6,8 @@ description: |-
   - 表紙は有報の提出日時点の記載です。本店の移転や電話番号の変更は、各年の有報の行を並べて確認してください
   - 電話番号は記載のままの列と、数字だけにした列（`head_office_phone_digits`）があります
   - 代表者・事務連絡者の氏名は含みません
-sources:
-  - path: https://disclosure2.edinet-fsa.go.jp/
-fields:
+sources: [disclosure2]
+columns:
   - name: doc_id
     title: 書類管理番号
     description: mart_documents / stg_financial_facts と結合できる
@@ -22,7 +19,7 @@ fields:
   - name: corporate_number
     title: 提出者法人番号
     description: 13桁。houjin_bangou / gbizinfo と結合できる
-    semantic: {role: entity, name: corporate_number}
+    entity: {type: foreign, name: corporate_number}
   - name: filer_name
     title: 提出者名
   - name: period_end
@@ -61,4 +58,3 @@ fields:
   - name: contact_phone_digits
     title: 最寄りの連絡場所の電話番号（数字のみ）
     description: contact_phone を head_office_phone_digits と同じ方法で数字だけにしたもの
----

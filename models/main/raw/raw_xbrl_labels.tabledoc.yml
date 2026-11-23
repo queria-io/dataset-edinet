@@ -1,8 +1,6 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.raw_xbrl_labels
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 description: type=1 の ZIP の会社独自のラベル。会社独自の要素とメンバー（セグメントなど）の名前
-fields:
+columns:
   - name: doc_id
     description: 書類管理番号
   - name: element_id
@@ -13,5 +11,4 @@ fields:
     description: 言語（ja / en）
   - name: label
     description: ラベル
-published: false
----
+listed: false
