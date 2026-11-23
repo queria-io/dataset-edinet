@@ -1,8 +1,6 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.raw_xbrl_contexts
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 description: XBRL インスタンスの context。期間と、軸・メンバーの組
-fields:
+columns:
   - name: doc_id
     description: 書類管理番号
   - name: context_id
@@ -15,5 +13,4 @@ fields:
     description: 時点の日付
   - name: members
     description: 軸とメンバーの組の JSON（[[軸, メンバー], …]）
-published: false
----
+listed: false

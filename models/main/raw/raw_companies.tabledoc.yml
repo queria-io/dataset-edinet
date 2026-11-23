@@ -1,8 +1,6 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.raw_companies
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 description: EDINETコードリスト（EdinetcodeDlInfo.csv）の提出者マスタ。全項目を VARCHAR で保持し、型付け・リネームは stg 層で行う
-fields:
+columns:
   - name: edinet_code
     description: EDINETコード（E+5桁）
   - name: submitter_type
@@ -31,5 +29,4 @@ fields:
     description: 提出者法人番号（13桁）
   - name: _fetched_at
     description: コードリスト取得時刻（取得時メタ）
-published: false
----
+listed: false

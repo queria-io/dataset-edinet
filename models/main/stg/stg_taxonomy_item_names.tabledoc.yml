@@ -1,13 +1,10 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.stg_taxonomy_item_names
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 description: EDINET タクソノミの要素の項目名（冗長ラベル、無ければ標準ラベル）の引き当て表。stg_financial_facts の item_name に使う
-fields:
+columns:
   - name: namespace
     description: タクソノミのモジュールと日付（jppfs/2025-11-01 など）。'*' は名前空間によらない最も新しい年版のラベル
   - name: element_id
     description: 要素またはメンバーの ID
   - name: label
     description: 日本語の項目名
-published: false
----
+listed: false
