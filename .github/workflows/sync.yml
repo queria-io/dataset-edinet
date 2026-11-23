@@ -19,7 +19,7 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: queria-io/dataset-shared/.github/workflows/sync.yml@143f32e955a62a7eda9d92492619354cad154ad2
+    uses: queria-io/dataset-shared/.github/workflows/sync.yml@60d6e060a2e5bcbe62583d388b3f63baf3835631
     with:
       dataset_name: edinet
       # 共通の既定 90 分では足りない。run 44873306215 は取得とビルドに 2 時間、
