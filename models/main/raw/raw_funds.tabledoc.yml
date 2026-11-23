@@ -21,4 +21,4 @@ columns:
     description: 発行者名
   - name: _fetched_at
     description: コードリスト取得時刻（取得時メタ）
-listed: false
+hidden: true

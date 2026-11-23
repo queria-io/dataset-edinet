@@ -13,4 +13,4 @@ columns:
     description: 時点の日付
   - name: members
     description: 軸とメンバーの組の JSON（[[軸, メンバー], …]）
-listed: false
+hidden: true

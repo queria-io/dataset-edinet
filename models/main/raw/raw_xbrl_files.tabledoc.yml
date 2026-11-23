@@ -16,4 +16,4 @@ columns:
     description: 取得元の書類取得 API の URL（取得には EDINET の API キーが要る）
   - name: fetched_at
     description: 取得した日時
-listed: false
+hidden: true

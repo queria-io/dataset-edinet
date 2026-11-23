@@ -1,3 +1,3 @@
 $schema: https://tabledoc.queria.io/schemas/table/v1.json
 description: raw_financial_facts（type=5 の CSV）を XBRL の行と同じ列にそろえたビュー。
-listed: false
+hidden: true

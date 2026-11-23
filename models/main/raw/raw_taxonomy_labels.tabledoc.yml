@@ -15,4 +15,4 @@ columns:
     description: 言語（ja / en）
   - name: label
     description: ラベル
-listed: false
+hidden: true

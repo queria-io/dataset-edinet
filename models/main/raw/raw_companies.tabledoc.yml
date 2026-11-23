@@ -29,4 +29,4 @@ columns:
     description: 提出者法人番号（13桁）
   - name: _fetched_at
     description: コードリスト取得時刻（取得時メタ）
-listed: false
+hidden: true

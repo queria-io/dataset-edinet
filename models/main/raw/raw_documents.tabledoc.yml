@@ -61,4 +61,4 @@ columns:
     description: 縦覧区分（"1"=縦覧中, "2"=延長期間中, "0"=閲覧期間満了）
   - name: _fetch_date
     description: 取得対象日（書類一覧 API のファイル日付。取得時メタ）
-listed: false
+hidden: true

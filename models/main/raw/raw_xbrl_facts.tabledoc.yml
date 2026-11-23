@@ -19,4 +19,4 @@ columns:
     description: 値。テキストブロックは HTML
   - name: _fetched_at
     description: 取得日時
-listed: false
+hidden: true

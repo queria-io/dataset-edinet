@@ -7,4 +7,4 @@ columns:
     description: 要素またはメンバーの ID
   - name: label
     description: 日本語の項目名
-listed: false
+hidden: true

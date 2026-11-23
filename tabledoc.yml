@@ -36,12 +36,12 @@ licenses:
 sources:
   - id: disclosure2
     title: EDINET（金融庁）
-    path: https://disclosure2.edinet-fsa.go.jp/
+    url: https://disclosure2.edinet-fsa.go.jp/
 
 contributors:
   - id: fsa
     title: 金融庁
-    path: https://www.fsa.go.jp/
+    url: https://www.fsa.go.jp/
     roles: [rightsHolder]
 
 temporal_coverage: {start: "2016-06-23", end: null}
