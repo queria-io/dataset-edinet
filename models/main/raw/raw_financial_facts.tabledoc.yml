@@ -27,4 +27,4 @@ columns:
     description: CSV 内の行番号（取得時メタ）
   - name: _fetched_at
     description: CSV 取得時刻（取得時メタ）
-listed: false
+hidden: true

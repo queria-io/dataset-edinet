@@ -7,4 +7,4 @@ columns:
     description: 接頭辞（jppfs_cor など）
   - name: uri
     description: 名前空間の URI（http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2025-11-01/jppfs_cor など）
-listed: false
+hidden: true
