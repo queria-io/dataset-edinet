@@ -20,3 +20,6 @@ dist/
 
 # fdl のアセットとして上げる XBRL の ZIP (scripts/build.sh)
 .xbrl/
+
+# 共通のスクリプト (git clone https://github.com/queria-io/dataset-shared.git shared)
+shared/
