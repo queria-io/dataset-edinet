@@ -15,7 +15,7 @@
 標準の要素の名前は、金融庁が年 1 回公表する EDINET タクソノミから取ります。公表ページ（https://www.fsa.go.jp/search/）からまだ入れていない年版を見つけて `_source.taxonomy_labels` に入れるので、新しい年版の追加に手作業は要りません。直近 1 年の書類に名前の付かない要素があると、dbt のテスト（`stg_financial_facts_labels_present`）が失敗します。
 
 ```bash
-git submodule update --init
+git clone https://github.com/queria-io/dataset-shared.git shared  # 更新は git -C shared pull
 uv sync
 FDL_TOKEN=... bash scripts/build.sh
 ```
