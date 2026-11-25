@@ -38,6 +38,7 @@ columns:
   - name: item_name
     title: 項目名
     description: 要素の日本語ラベル。標準の要素は金融庁のタクソノミ、会社独自の要素は提出書類のラベルから取る
+    dimension: categorical
   - name: context_id
     title: コンテキストID
     description: 期間・連結区分・セグメントの識別子（CurrentYearInstant など）

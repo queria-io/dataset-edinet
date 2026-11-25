@@ -10,9 +10,11 @@ columns:
   - name: submitter_type
     title: 提出者種別
     description: 内国法人・組合、外国法人 等
+    dimension: categorical
   - name: listing_status
     title: 上場区分
     description: 上場 / 非上場
+    dimension: categorical
   - name: is_consolidated
     title: 連結の有無
   - name: capital
@@ -32,6 +34,7 @@ columns:
     description: 市区町村名から始まり、都道府県名は付かない
   - name: industry
     title: 提出者業種
+    dimension: categorical
   - name: sec_code
     title: 証券コード
     description: 末尾0付き5桁。非上場は空
