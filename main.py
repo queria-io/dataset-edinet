@@ -533,6 +533,8 @@ def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
     doc_ids = _fetched_doc_ids(conn, "xbrl_fetch_progress")["doc_id"].to_pylist()
     found: list[tuple] = []
     for start in range(0, len(doc_ids), REPARSE_BATCH_DOCS):
+        # 値の表を全件読むので 1 時間を超えることがある。束ごとにトランザクションの外で張り直す
+        fdl_read.refresh(conn)
         conn.register("_docs", pa.table({"doc_id": doc_ids[start : start + REPARSE_BATCH_DOCS]}))
         found += conn.execute(
             f"SELECT f.doc_id, f.element_id, f.context_id, f.value FROM {XBRL_FACTS_TABLE} AS f "
