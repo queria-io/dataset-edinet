@@ -17,6 +17,7 @@ columns:
   - name: security_type
     title: 特定有価証券区分名
     description: 内国投資信託受益証券、外国投資信託受益証券 等
+    dimension: categorical
   - name: specified_period_1
     title: 特定期1
     description: 決算期の月日

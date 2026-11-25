@@ -35,9 +35,11 @@ columns:
   - name: category
     title: 区分（記載のまま）
     description: 有報の見出しの区分名（連結子会社・持分法適用関連会社・持分法適用会社・その他の関係会社の子会社など）
+    dimension: categorical
   - name: category_group
     title: 区分
     description: category を 親会社・連結子会社・非連結子会社・持分法適用会社・関連会社・その他の関係会社 にまとめたもの
+    dimension: categorical
   - name: name
     title: 関係会社の名称
     description: 注記番号（「（注）３」「※１」）を外し、折り返しで入った和文どうしの間の空白を詰めたもの

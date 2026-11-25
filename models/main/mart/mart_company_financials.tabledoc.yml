@@ -32,6 +32,7 @@ columns:
   - name: accounting_standard
     title: 会計基準
     description: Japan GAAP・IFRS・US GAAP。XBRL を取得できず CSV の値だけの書類は NULL
+    dimension: categorical
   - name: is_consolidated
     title: 連結の値か
     description: true なら連結、false なら個別（連結財務諸表を作っていない会社）
