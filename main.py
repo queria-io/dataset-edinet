@@ -206,8 +206,7 @@ def _ducklake_connect() -> Generator[duckdb.DuckDBPyConnection]:
         conn.execute("SET http_timeout = 300; SET http_retries = 5;")
         # 公開中のデータファイルをリポジトリのトークン付きで読む。main にまだ入って
         # いない apply のバージョンのファイルは、トークンが無いと 404 になる
-        for statement in fdl_read.statements():
-            conn.execute(statement)
+        fdl_read.refresh(conn)
         conn.execute(
             f"ATTACH 'ducklake:{catalog_path}' AS edinet "
             f"(DATA_PATH '{data_url}', OVERRIDE_DATA_PATH true, "
@@ -275,6 +274,7 @@ def ingest() -> None:
         targets = _dates_to_fetch(conn, start, end)
         logger.info("fetch %d dates (%s 〜 %s)", len(targets), start, end)
         ingest_documents(conn, client, targets)
+        fdl_read.refresh(conn)
         ingest_companies(conn)
         ingest_funds(conn)
         folder = xbrl_dir()
@@ -283,6 +283,7 @@ def ingest() -> None:
         xbrl_doc_ids = _xbrl_docs_to_fetch(conn, keep_zips=folder is not None)
         logger.info("fetch XBRL for %d docs", len(xbrl_doc_ids))
         ingest_xbrl(conn, client, xbrl_doc_ids, folder)
+        fdl_read.refresh(conn)
         ingest_taxonomy(conn)
         if os.environ.get("EDINET_REPARSE_AFFILIATES") == "1":
             reparse_affiliates(conn)
@@ -320,6 +321,8 @@ def ingest_documents(
     """対象日ごとに書類一覧を取得し、日単位で upsert + 進捗永続化する。"""
     total = len(targets)
     for i, d in enumerate(targets, 1):
+        # 1 時間を超える取り込みでも読み取りのトークンが切れないよう、トランザクションの外で張り直す
+        fdl_read.refresh(conn)
         results = client.get_documents(d.isoformat())
         _write_date(conn, d, results)
         if i % 50 == 0 or i == total:
@@ -487,6 +490,7 @@ def ingest_xbrl(
         if not docs:
             return
         ph = ", ".join("?" for _ in docs)
+        fdl_read.refresh(conn)
         conn.execute("BEGIN")
         for key, table, schema in _XBRL_TABLES:
             conn.execute(f"DELETE FROM {table} WHERE doc_id IN ({ph})", docs)
@@ -529,6 +533,8 @@ def reparse_affiliates(conn: duckdb.DuckDBPyConnection) -> None:
     doc_ids = _fetched_doc_ids(conn, "xbrl_fetch_progress")["doc_id"].to_pylist()
     found: list[tuple] = []
     for start in range(0, len(doc_ids), REPARSE_BATCH_DOCS):
+        # 値の表を全件読むので 1 時間を超えることがある。束ごとにトランザクションの外で張り直す
+        fdl_read.refresh(conn)
         conn.register("_docs", pa.table({"doc_id": doc_ids[start : start + REPARSE_BATCH_DOCS]}))
         found += conn.execute(
             f"SELECT f.doc_id, f.element_id, f.context_id, f.value FROM {XBRL_FACTS_TABLE} AS f "
